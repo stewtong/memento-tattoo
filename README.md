@@ -4,9 +4,7 @@
 
 This memory system is modeled after Christopher Nolan's *Memento*: Leonard Shelby has memory up to a fixed point in time, then relies on external systems for everything after it. Notes, Polaroids, and tattoos become his post-cutoff memory.
 
-LLMs have a similar shape: training data gives them a cutoff, and the rest has to arrive through external memory loaded into context. Notes capture details, but only help when he can find the right one. Polaroids preserve compact context, but captions can be incomplete. Tattoos get privileged surface area because they are the reminders he cannot afford to miss.
-
-`memento-tattoo` applies that model to LLM agents. Project `memory.md` files are the Polaroids: context attached to the thing being worked on. Notes are searchable lessons from prior sessions. Tattoos are the scarce rules that deserve repeated attention in a limited context window.
+LLMs have a similar shape: training data gives them a cutoff, and the rest has to arrive through external memory loaded into context. `memento-tattoo` applies that model to agents: project `memory.md` files are the Polaroids, notes hold searchable lessons, and tattoos are the scarce reminders that deserve repeated attention.
 
 Early reference implementation. Install from source; not published to PyPI yet.
 
@@ -14,16 +12,16 @@ Early reference implementation. Install from source; not published to PyPI yet.
 
 Most agent memory systems start by asking how much context can be recalled. `memento-tattoo` asks a narrower question: what correction would change the agent's next action?
 
-`memento-tattoo` treats agent memory as a lightweight continuous-learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and the retention log checks whether the right lesson was available when the agent needed it.
+That makes memory a lightweight continuous-learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and the retention log checks whether the right lesson showed up when it mattered.
 
-The mapping is deliberate:
+The layers are intentionally small:
 
-- Notes are cheap to write, but fail silently when the right one does not surface.
+- Notes are cheap to write but fail silently when the right one does not surface.
 - Project memory is attached to the thing being worked on, like a labeled snapshot.
 - Tattoos have limited surface area, like an agent's limited context window.
 - The retention loop checks whether the right lesson appeared when it was needed.
 
-The first release is intentionally small:
+The first release keeps the surface area narrow:
 
 - plain Markdown files for notes, project context, and promoted lessons
 - adjacent project `memory.md` action journals
