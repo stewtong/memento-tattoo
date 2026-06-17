@@ -14,6 +14,8 @@ Early reference implementation. Install from source; not published to PyPI yet.
 
 Most agent memory systems start by asking how much context can be recalled. `memento-tattoo` asks a narrower question: what correction would change the agent's next action?
 
+`memento-tattoo` treats agent memory as a lightweight continuous-learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and the retention log checks whether the right lesson was available when the agent needed it.
+
 The mapping is deliberate:
 
 - Notes are cheap to write, but fail silently when the right one does not surface.
