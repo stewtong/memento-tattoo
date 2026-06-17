@@ -1,25 +1,19 @@
 # memento-tattoo
 
-`memento-tattoo` is a file-based memory framework for LLM agents.
+`memento-tattoo` is a file-based correction-retention framework for LLM agents.
 
-This memory system is modeled after Christopher Nolan's *Memento*: Leonard Shelby has memory up to a fixed point in time, then relies on external systems for everything after it. Notes, Polaroids, and tattoos become his post-cutoff memory.
+If you want to understand or adapt the pattern, start with [IDEA.md](IDEA.md).
+If you want a working local CLI, install this repo.
 
-LLMs have a similar shape: training data gives them a cutoff, and the rest has to arrive through external memory loaded into context. `memento-tattoo` applies that model to agents: project `memory.md` files are the Polaroids, notes hold searchable lessons, and tattoos are the scarce reminders that deserve repeated attention.
+The pattern is modeled after Christopher Nolan's *Memento*: notes are cheap lesson captures, project `memory.md` files are the Polaroids beside the work, and tattoos are the scarce reminders that deserve repeated attention.
 
-Early reference implementation. Install from source; not published to PyPI yet.
+This repo is an early reference implementation. Install from source; it is not published to PyPI yet.
 
 ## What it solves
 
 Most agent memory systems start by asking how much context can be recalled. `memento-tattoo` asks a narrower question: what correction would change the agent's next action?
 
 That makes memory a lightweight continuous-learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and the retention log checks whether the right lesson showed up when it mattered.
-
-The layers are intentionally small:
-
-- Notes are cheap to write but fail silently when the right one does not surface.
-- Project memory is attached to the thing being worked on, like a labeled snapshot.
-- Tattoos have limited surface area, like an agent's limited context window.
-- The retention loop checks whether the right lesson appeared when it was needed.
 
 The first release keeps the surface area narrow:
 
@@ -135,6 +129,7 @@ This first release does not include vector search, embeddings, a database, an MC
 
 ## Docs
 
+- [Idea file](IDEA.md)
 - [Concepts](docs/concepts.md)
 - [Design essay](docs/essay.md)
 

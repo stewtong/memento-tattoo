@@ -15,6 +15,7 @@ PUBLIC_ENTRIES = (
     "docs",
     ".gitignore",
     "README.md",
+    "IDEA.md",
     "LICENSE",
     "pyproject.toml",
     "MANIFEST.in",

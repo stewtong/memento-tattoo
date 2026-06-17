@@ -9,6 +9,7 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     copied = export_public(export_root, source_root=Path.cwd())
 
     assert (export_root / "README.md").exists()
+    assert (export_root / "IDEA.md").exists()
     assert (export_root / "pyproject.toml").exists()
     assert (export_root / "MANIFEST.in").exists()
     assert (export_root / ".github/workflows/ci.yml").exists()
