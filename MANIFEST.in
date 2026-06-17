@@ -1,0 +1,23 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include CONTRIBUTING.md
+include CHANGELOG.md
+include .gitignore
+recursive-include src *.py
+recursive-include tests *.py
+recursive-include examples *.md *.jsonl
+recursive-include docs *.md
+recursive-include scripts *.py
+recursive-include .github *.yml
+prune .tmp
+prune dist
+prune build
+prune plans
+prune research
+prune specs
+exclude memory.md
+exclude memento-tattoo-README-draft.md
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store

@@ -1,0 +1,2 @@
+{"candidates":[],"decision":"new","decided_by":"agent","kind":"reflection","note_id":"sess_demo.note.11111111","repair":"","review_needed":false,"sess":"sess_demo","situation":"publishing a public repo","ts":"2026-06-17T00:00:00"}
+{"candidates":[{"note_id":"sess_demo.note.22222222","rank":1,"score":80}],"decision":"existing-repaired","decided_by":"agent","kind":"correction","note_id":"sess_demo.note.22222222","repair":"added duplicate alias","review_needed":false,"sess":"sess_demo","situation":"repeating a corrected mistake","ts":"2026-06-17T00:05:00"}
