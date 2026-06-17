@@ -8,7 +8,7 @@ LLMs have a similar shape: training data gives them a cutoff, and the rest has t
 
 `memento-tattoo` applies that model to LLM agents. Project `memory.md` files are the Polaroids: context attached to the thing being worked on. Notes are searchable lessons from prior sessions. Tattoos are the scarce rules that deserve repeated attention in a limited context window.
 
-Pre-release reference implementation.
+Early reference implementation. Install from source; not published to PyPI yet.
 
 ## What it solves
 
@@ -61,7 +61,7 @@ Inspect the example root:
 
 ```bash
 .venv/bin/memento-tattoo --root examples/basic/memento load --project examples/basic/project --query "sanitize public release"
-.venv/bin/memento-tattoo --root examples/basic/memento garden --today 2026-06-17
+.venv/bin/memento-tattoo --root examples/basic/memento garden
 ```
 
 Create a new root:
@@ -138,6 +138,10 @@ This first release does not include vector search, embeddings, a database, an MC
 - [Concepts](docs/concepts.md)
 - [Design essay](docs/essay.md)
 
+## License
+
+Apache-2.0.
+
 ## Development
 
 ```bash
@@ -146,4 +150,4 @@ This first release does not include vector search, embeddings, a database, an MC
 .venv/bin/python -m build
 ```
 
-The package is PyPI-ready in structure, but the first release target is GitHub sharing rather than package-index publication.
+The package is structured for PyPI publication, but this first release is source-installable from GitHub only.

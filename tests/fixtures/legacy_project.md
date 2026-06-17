@@ -1,4 +1,4 @@
-# Legacy Project Fixture
+# Legacy project fixture
 
 This file is kept to prove backward-compatible recall from the original single-root example.
 

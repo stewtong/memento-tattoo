@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-06-17
 
 - Initial reference implementation.
 - Adds file-based notes, project memory, tattoos, and retention log.
