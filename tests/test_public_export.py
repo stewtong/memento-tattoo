@@ -13,6 +13,7 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert (export_root / "pyproject.toml").exists()
     assert (export_root / "MANIFEST.in").exists()
     assert (export_root / ".github/workflows/ci.yml").exists()
+    assert (export_root / "examples/basic/README.md").exists()
     assert (export_root / "examples/basic/memento/notes.md").exists()
     assert {path.name for path in (export_root / "examples/basic/memento").iterdir()} == {
         "notes.md",
@@ -20,15 +21,24 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
         "tattoos.md",
     }
     assert (export_root / "examples/basic/project/memory.md").exists()
-    assert "/memory.md" in (export_root / ".gitignore").read_text(encoding="utf-8")
+    gitignore = (export_root / ".gitignore").read_text(encoding="utf-8")
+    assert "/memory.md" in gitignore
+    assert "/memento-tattoo-README-draft.md" in gitignore
+    assert "/plans/" in gitignore
+    assert "/research/" in gitignore
+    assert "/specs/" in gitignore
     assert (export_root / "docs/concepts.md").exists()
     assert {path.name for path in (export_root / "docs").iterdir()} == {
         "concepts.md",
         "essay.md",
     }
+    assert {path.name for path in (export_root / "templates").iterdir()} == {
+        "AGENTS.md",
+    }
     assert (export_root / "scripts/export_public.py").exists()
     assert "memory.md" not in copied
     assert not (export_root / "memory.md").exists()
+    assert not (export_root / "memento-tattoo-README-draft.md").exists()
     assert not (export_root / "plans").exists()
     assert not (export_root / "research").exists()
     assert not (export_root / "specs").exists()

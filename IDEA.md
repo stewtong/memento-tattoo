@@ -88,7 +88,7 @@ If a lesson recurs across different situations, propose promoting it to a tattoo
 
 Before starting a task with a recognizable situation name, search notes and tattoos for that situation.
 
-Keep project memory beside the project. Do not hide project-specific state in a global database when a local file would work.
+Keep project memory beside the project. Put project-specific state close to the work it explains.
 
 Treat retention logs as append-only.
 ```

@@ -13,6 +13,7 @@ PUBLIC_ENTRIES = (
     "tests",
     "examples",
     "docs",
+    "templates",
     ".gitignore",
     "README.md",
     "IDEA.md",

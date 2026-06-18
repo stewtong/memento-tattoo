@@ -11,7 +11,7 @@ def test_basic_example_root_is_valid():
 
     ok, output = run_doctor(root)
     project_ok, project_output = run_doctor(root, projects=[project])
-    ranked = rank_memento_notes("sanitize public release", root=root)
+    ranked = rank_memento_notes("claiming complete verification", root=root)
     project_ranked = rank_memento_notes("package installability built artifact", root=root, projects=[project])
     digest = build_digest(root=root, today="2026-06-17")
 
