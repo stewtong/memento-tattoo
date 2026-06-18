@@ -3,7 +3,7 @@
 `memento-tattoo` is a correction-retention loop that helps coding agents stop repeating corrected mistakes across sessions.
 
 If you want to understand or adapt the pattern, start with [IDEA.md](IDEA.md).
-If you want a working local CLI, install this repo.
+If you want a working local CLI, install from source.
 
 `memento-tattoo` is modeled after Christopher Nolan's *Memento*.
 
@@ -19,7 +19,9 @@ In *Memento*, Leonard uses a tiered memory system: notes for quick observations,
 
 The point is not to remember everything. The point is to preserve the lessons that should change the next action.
 
-This repo is an early reference implementation. Install from source.
+Generic memory stores context. `memento-tattoo` stores corrections that should alter future behavior.
+
+This repo is a reference implementation. Install from source.
 
 ## What it solves
 
@@ -27,15 +29,12 @@ Most agent memory systems start by asking how much context can be recalled. `mem
 
 That makes memory a lightweight continuous-learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and the retention log checks whether the right lesson showed up when it mattered.
 
-The first release keeps the surface area narrow:
+This reference implementation keeps the surface area narrow:
 
 - plain Markdown files for notes, project context, and promoted lessons
 - adjacent project `memory.md` action journals
 - append-only JSONL retention log
 - checked retrieval before adding correction/reflection notes
-- agent-signed provenance markers
-- collision-safe session IDs and session indexes
-- queued registry drain for shared project summaries
 - read-only gardening digest
 - simple doctor checks
 - local CLI, no service dependency
@@ -56,15 +55,17 @@ memento/
 
 That plain-Markdown version is enough for a single agent, a lightly coordinated team, or a repo-local convention. It does not provide real concurrent-write protection.
 
-The CLI in this repo is the reference implementation of that pattern. It is useful when you want checked writes, ranked recall, collision-safe session IDs, local multi-agent write safety, doctor checks, and a read-only gardening digest.
+The practical layers look like this:
 
-## Multi-agent local writes
+```text
+AGENTS.md / CLAUDE.md  = how the agent should behave
+project/memory.md     = what is going on here
+memento/notes.md      = what the work taught us
+memento/tattoos.md    = what must not be forgotten
+retention_log.jsonl   = whether the lesson surfaced when it mattered
+```
 
-Agent swarms and parallel coding sessions are normal now. `memento-tattoo` includes local coordination features for that shape of work: multiple agents can write to the same local memento root without relying on a human to serialize every save.
-
-Short writes take an advisory file lock, session IDs are reserved before use, retries are idempotent, and shared registry updates go through a queue-and-drain path.
-
-This is designed for a local filesystem. Network filesystems and sync folders may not preserve the lock semantics.
+The CLI in this repo is the reference implementation of that pattern. It is useful when you want checked writes, ranked recall, doctor checks, a read-only gardening digest, and optional local coordination for parallel agent sessions.
 
 ## Failure loop example
 
@@ -77,6 +78,14 @@ The basic example shows the loop this project is designed for:
 5. A later task can load the tattoo before claiming completion.
 
 See [examples/basic/README.md](examples/basic/README.md) for the concrete walkthrough.
+
+## Multi-agent local writes
+
+Agent swarms and parallel coding sessions are normal now. `memento-tattoo` includes local coordination features for that shape of work: multiple agents can write to the same local memento root without relying on a human to serialize every save.
+
+Short writes take an advisory file lock, session IDs are reserved before use, retries are idempotent, and shared registry updates go through a queue-and-drain path.
+
+This is designed for a local filesystem. Network filesystems and sync folders may not preserve the lock semantics.
 
 ## Design bets
 
@@ -144,19 +153,31 @@ EOF
 
 ## CLI
 
+Core loop:
+
 ```text
 memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] <text>
 memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
 memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] <text>
+memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
+```
+
+Advanced coordination:
+
+```text
 memento-tattoo --root <path> --agent <agent_id> new-id
 memento-tattoo --root <path> --agent <agent_id> session-add --sess <sess_id> --date "2026-06-17 18:24" --topics "memento-oss,multi-agent" --significance medium --accomplished "Published docs polish" --started "none" --pending "none" --insights "none" --files "README.md; templates/AGENTS.md"
 memento-tattoo --root <path> --agent <agent_id> registry-queue --sess <sess_id> --action update --slug memento-oss "- Memento OSS - memento-oss/ - active"
 memento-tattoo --root <path> drain
-memento-tattoo --root <path> rebuild [--check]
 memento-tattoo --root <path> save-commit --spec <json>
-memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
+```
+
+Maintenance and debugging:
+
+```text
 memento-tattoo --root <path> garden [--today YYYY-MM-DD] [--promote-threshold N]
 memento-tattoo --root <path> doctor [--project <project_dir>]...
+memento-tattoo --root <path> rebuild [--check]
 ```
 
 `seed` notes are imported without retention logging. `correction` and `reflection` notes run checked retrieval first and append one retention event only when the note write is new.
@@ -193,7 +214,7 @@ memento/
 
 ## Out of scope
 
-This first release does not include vector search, embeddings, a database, an MCP server, auto-capture hooks, hosted sync, transcript storage, a generic personal memory system, benchmark claims, or migration tooling from any private setup.
+This reference implementation does not include vector search, embeddings, a database, an MCP server, auto-capture hooks, hosted sync, transcript storage, a generic personal memory system, benchmark claims, or migration tooling from any private setup.
 
 ## Docs
 
@@ -223,4 +244,4 @@ This development checkout can contain local planning, research, and memory artif
 
 Use the exported tree for public GitHub pushes. Do not publish this development checkout directly.
 
-This first release is source-installable from GitHub.
+This reference implementation is source-installable from GitHub.

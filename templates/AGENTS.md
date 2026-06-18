@@ -40,6 +40,10 @@ Use these retention decisions:
 
 ## Multi-agent writes
 
+Plain Markdown works best for one agent at a time, or for teams that already coordinate writes.
+
+If using the `memento-tattoo` CLI or a compatible implementation:
+
 Set an agent identity before writing:
 
 ```bash
