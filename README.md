@@ -31,12 +31,10 @@ That makes memory a lightweight continuous-learning loop. The model weights do n
 
 This reference implementation keeps the surface area narrow:
 
-- plain Markdown files for notes, project context, and promoted lessons
-- adjacent project `memory.md` action journals
-- append-only JSONL retention log
-- checked retrieval before adding correction/reflection notes
-- read-only gardening digest
-- simple doctor checks
+- plain Markdown files for notes, project memory, tattoos, and retention logs
+- checked writes and ranked recall
+- doctor checks and read-only gardening
+- optional local coordination for parallel sessions
 - local CLI, no service dependency
 
 ## Try the pattern without installing
@@ -69,7 +67,7 @@ Modern coding agents already have memory surfaces: `AGENTS.md`, `CLAUDE.md`, rul
 
 Tattoo lessons are intended to be loaded at startup. Project `memory.md` and `memento/notes.md` should be searched first, then loaded only when they match the current task.
 
-The CLI in this repo is the reference implementation of that pattern. It is useful when you want checked writes, ranked recall, doctor checks, a read-only gardening digest, and optional local coordination for parallel agent sessions.
+Plain Markdown is enough to try the pattern. The CLI adds checked writes, ranked recall, doctor checks, gardening, and optional local coordination for parallel sessions.
 
 ## The agent is the judge
 
@@ -89,7 +87,9 @@ This is a judgment pass, not a transcript dump. The useful question is:
 What from this session should change a future action?
 ```
 
-Write to project `memory.md` when the project state changed: files changed, decisions were made, constraints were discovered, current status changed, or a future agent should not rediscover the same context. Use replacement for current-state snapshots and append mode for accumulating worklog sections.
+Write to project `memory.md` when the project state changed: files changed, decisions were made, constraints were discovered, current status changed, or a future agent should not rediscover the same context. Project memory should summarize state beside the work it explains, not become a transcript log.
+
+Project memory can be replaced for current state or appended for worklog-style sections; the CLI guards against silent overwrites.
 
 Write to `notes.md` when the session produced a reusable lesson: a correction that could recur, a mistake pattern the agent noticed, an existing lesson that needs better aliases, or an operating lesson that would change behavior in a similar future situation.
 
@@ -136,18 +136,16 @@ The basic example shows the loop this project is designed for:
 1. An agent claims a code change is complete without running the proof command.
 2. The user correction is captured as a note in [examples/basic/memento/notes.md](examples/basic/memento/notes.md).
 3. The retention log records that an existing verification lesson was repaired in [examples/basic/memento/retention_log.jsonl](examples/basic/memento/retention_log.jsonl).
-4. A broader completion rule is promoted to [examples/basic/memento/tattoos.md](examples/basic/memento/tattoos.md).
+4. If the user approves the broader completion rule, it is promoted to [examples/basic/memento/tattoos.md](examples/basic/memento/tattoos.md).
 5. A later task can load the tattoo before claiming completion.
 
 See [examples/basic/README.md](examples/basic/README.md) for the concrete walkthrough.
 
-## Advanced: multi-agent local writes
+## Advanced: local coordination
 
-Agent swarms and parallel coding sessions are normal now. `memento-tattoo` includes local coordination features for that shape of work: multiple agents can write to the same local memento root without relying on a human to serialize every save.
+If you run parallel local agents, the CLI has coordination guardrails: advisory locks for short writes, reserved session IDs, idempotent markers, and a queued registry drain path.
 
-Short writes take an advisory file lock, session IDs are reserved before use, retries are idempotent, and shared registry updates go through a queue-and-drain path.
-
-This is designed for a local filesystem. Network filesystems and sync folders may not preserve the lock semantics.
+This is designed for a local filesystem. Network filesystems and sync folders may not preserve lock semantics. See [Concepts](docs/concepts.md) for the mechanics.
 
 ## Design bets
 
@@ -214,38 +212,36 @@ EOF
 .venv/bin/memento-tattoo --root .tmp/demo-memento load --project .tmp/demo-project --query "claiming complete verification"
 ```
 
-## CLI
+## CLI at a glance
+
+Examples include the shared `--root <path>` flag; add `--agent <agent_id>` when you want provenance for parallel sessions. These are abbreviated command shapes; see [Concepts](docs/concepts.md) for full options.
 
 Core loop:
 
 ```text
-memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] [--decision new|existing-missed|existing-repaired|false-positive] [--repair <text>] [--covered-note-id <note_id>] <text>
-memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
-memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] [--append|--replace] <text>
-memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
+memento-tattoo --root <path> note-add      # capture a correction/reflection lesson
+memento-tattoo --root <path> tattoo-add    # write an approved promoted lesson
+memento-tattoo --root <path> project-edit  # update adjacent project memory.md
+memento-tattoo --root <path> load          # rank relevant lessons for a task
 ```
 
-Advanced coordination:
+Maintenance:
 
 ```text
-memento-tattoo --root <path> --agent <agent_id> new-id
-memento-tattoo --root <path> --agent <agent_id> session-add ...
-memento-tattoo --root <path> --agent <agent_id> registry-queue --sess <sess_id> --action update --slug memento-oss "- Memento OSS - memento-oss/ - active"
+memento-tattoo --root <path> doctor
+memento-tattoo --root <path> garden
+memento-tattoo --root <path> rebuild --check
+```
+
+Advanced local coordination:
+
+```text
+memento-tattoo --root <path> new-id
+memento-tattoo --root <path> session-add ...
+memento-tattoo --root <path> registry-queue ...
 memento-tattoo --root <path> drain
 memento-tattoo --root <path> save-commit --spec <json>
 ```
-
-Maintenance and debugging:
-
-```text
-memento-tattoo --root <path> garden [--today YYYY-MM-DD] [--promote-threshold N]
-memento-tattoo --root <path> doctor [--project <project_dir>]...
-memento-tattoo --root <path> rebuild [--check]
-```
-
-`seed` notes are imported without retention logging. `correction` and `reflection` notes run checked retrieval first and append one retention event only when the note write is new. By default the retention event records the CLI's suggested decision; agents can override that judgment with `--decision`, `--repair`, and `--covered-note-id` when they have stronger context from the session.
-
-`project-edit` defaults to guarded `auto` mode. Auto mode replaces a section only when it will not silently drop existing delta markers, or preserves concurrent same-section edits when `--flow-start` shows another session wrote after the agent began. Use `--append` for accumulating worklog sections. Use `--replace` when intentionally rewriting a current-state snapshot such as `## State`.
 
 ## File layout
 

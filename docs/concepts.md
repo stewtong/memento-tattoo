@@ -2,6 +2,47 @@
 
 `memento-tattoo` separates memory into layers so an agent can keep lightweight working lessons without pretending every note is permanent.
 
+## When to use the CLI
+
+Plain Markdown is enough to try the correction-retention pattern. Use the CLI when you want guardrails around the files:
+
+- checked writes with provenance markers
+- ranked recall for task-specific memory loading
+- doctor checks and read-only gardening
+- session indexes and rebuild checks
+- optional local coordination for parallel sessions
+
+## Command reference
+
+Core loop:
+
+```text
+memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] [--decision new|existing-missed|existing-repaired|false-positive] [--repair <text>] [--covered-note-id <note_id>] <text>
+memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
+memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] [--append|--replace] <text>
+memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
+```
+
+Maintenance:
+
+```text
+memento-tattoo --root <path> doctor [--project <project_dir>]...
+memento-tattoo --root <path> garden [--today YYYY-MM-DD] [--promote-threshold N]
+memento-tattoo --root <path> rebuild [--check]
+```
+
+Advanced local coordination:
+
+```text
+memento-tattoo --root <path> --agent <agent_id> new-id
+memento-tattoo --root <path> --agent <agent_id> session-add --sess <sess_id> --date "2026-06-17 18:24" --topics "memento-oss,multi-agent" --significance medium --accomplished "Published docs polish" --started "none" --pending "none" --insights "none" --files "README.md; templates/AGENTS.md"
+memento-tattoo --root <path> --agent <agent_id> registry-queue --sess <sess_id> --action update --slug memento-oss "- Memento OSS - memento-oss/ - active"
+memento-tattoo --root <path> drain
+memento-tattoo --root <path> save-commit --spec <json>
+```
+
+Set `--agent <agent_id>` or `MEMENTO_AGENT` when several sessions may write to the same root. Agent IDs are provenance, not permissions.
+
 ## Notes
 
 Notes are fast lesson captures. They usually come from a correction, reflection, or import. They live in `notes.md` as readable Markdown blocks with a provenance marker:
@@ -65,12 +106,6 @@ Promote only when the lesson is durable across unrelated future sessions, behavi
 ## Sessions
 
 Sessions are small Markdown save records in `memento/sessions/`. Agents should reserve a session id with `new-id` instead of inventing one by hand, then write one `session-add` record for the work they completed.
-
-Full command shape:
-
-```text
-memento-tattoo --root <path> --agent <agent_id> session-add --sess <sess_id> --date "2026-06-17 18:24" --topics "memento-oss,multi-agent" --significance medium --accomplished "Published docs polish" --started "none" --pending "none" --insights "none" --files "README.md; templates/AGENTS.md"
-```
 
 Generated indexes live at:
 

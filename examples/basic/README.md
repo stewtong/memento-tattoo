@@ -46,9 +46,9 @@ From the repo root after installing the package:
 .venv/bin/memento-tattoo --root examples/basic/memento garden
 ```
 
-## Two-agent local write example
+## Advanced: local coordination example
 
-The CLI also supports several local agent sessions writing to the same memento root:
+The core correction-retention loop above does not require this. Use this shape only when several local sessions may write to the same memento root.
 
 ```bash
 codex_sess=$(.venv/bin/memento-tattoo --root .tmp/demo-memento --agent codex new-id)
