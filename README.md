@@ -7,7 +7,7 @@ If you want a working local CLI, install from source.
 
 `memento-tattoo` is modeled after Christopher Nolan's *Memento*.
 
-In the movie, Leonard cannot form new long-term memories, so everything important after his cutoff has to be externalized. LLMs have a similar shape: their training data is fixed, and only the context loaded into the current session can affect the next action.
+In the movie, Leonard cannot form new long-term memories, so everything important after his cutoff has to be externalized. LLMs face a similar operating problem: a correction from one session will not improve a later action unless it is preserved, located, and surfaced by an agent when relevant.
 
 In *Memento*, Leonard uses a tiered memory system: notes for quick observations, Polaroids beside the people and places they explain, and tattoos for the few facts important enough to survive every reset.
 
