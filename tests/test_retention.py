@@ -1,4 +1,5 @@
 from pathlib import Path
+import pytest
 
 from memento_tattoo.retention import (
     append_retention_event,
@@ -75,3 +76,35 @@ def test_checked_note_replay_does_not_duplicate_retention_event(tmp_path: Path):
     assert second is False
     assert first_marker == second_marker
     assert len(events) == 1
+
+
+def test_note_add_can_record_agent_retention_judgment(tmp_path: Path):
+    applied, _ = note_add(
+        "Situation: repeated completion claim\nNote: repaired the verification trigger",
+        sess="sess_judge",
+        root=tmp_path,
+        kind="correction",
+        decision="existing-repaired",
+        repair="added verification and complete aliases",
+        covered_note_id="sess_old.note.11111111",
+    )
+
+    events = read_retention_events(root=tmp_path)
+
+    assert applied is True
+    assert events[0]["decision"] == "existing-repaired"
+    assert events[0]["repair"] == "added verification and complete aliases"
+    assert events[0]["covered_note_id"] == "sess_old.note.11111111"
+    assert events[0]["decided_by"] == "agent"
+    assert recurrence_counts(root=tmp_path) == {"sess_old.note.11111111": 1}
+
+
+def test_seed_note_rejects_retention_judgment(tmp_path: Path):
+    with pytest.raises(ValueError, match="retention judgment requires correction or reflection"):
+        note_add(
+            "Situation: import\nNote: seed data",
+            sess="sess_seed",
+            root=tmp_path,
+            kind="seed",
+            decision="new",
+        )

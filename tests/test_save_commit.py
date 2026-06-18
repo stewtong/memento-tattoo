@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from memento_tattoo.save_commit import save_commit
+from memento_tattoo.retention import read_retention_events
 
 
 def _spec(sess: str = "sess_abcd") -> dict:
@@ -65,6 +66,86 @@ def test_full_spec_writes_all_surfaces_and_rerun_is_idempotent(tmp_path: Path):
     assert "Memento OSS" in (tmp_path / "registry.md").read_text(encoding="utf-8")
     assert "claiming work complete" in (tmp_path / "project" / "memory.md").read_text(encoding="utf-8")
     assert not list((tmp_path / "_queue").glob("*.registry.md"))
+
+
+def test_save_commit_passes_retention_judgment(tmp_path: Path):
+    spec = _spec()
+    spec.pop("tattoo")
+    spec["retention"] = {
+        "decision": "existing-repaired",
+        "repair": "added completion aliases",
+        "covered_note_id": "sess_old.note.11111111",
+    }
+
+    result = save_commit(spec, root=tmp_path)
+    events = read_retention_events(root=tmp_path)
+
+    assert result.ok, result.error
+    assert events[0]["decision"] == "existing-repaired"
+    assert events[0]["repair"] == "added completion aliases"
+    assert events[0]["covered_note_id"] == "sess_old.note.11111111"
+
+
+def test_save_commit_project_edit_append_mode_preserves_existing_section(tmp_path: Path):
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "memory.md").write_text(
+        "# Project Memory\n\n"
+        "## Worklog\n\n"
+        "<!-- delta:sess_old.project.11111111 agent=codex ts=2026-06-17T00:00:00Z -->\n"
+        "- Existing delta.\n",
+        encoding="utf-8",
+    )
+    spec = _spec()
+    spec["project_edit"] = {
+        "project": "project",
+        "section": "## Worklog",
+        "body": "- New delta.",
+        "mode": "append",
+    }
+    spec["verify"] = ["Existing delta", "New delta"]
+
+    result = save_commit(spec, root=tmp_path)
+
+    text = (project / "memory.md").read_text(encoding="utf-8")
+    assert result.ok, result.error
+    assert "- Existing delta." in text
+    assert "- New delta." in text
+
+
+def test_save_commit_rejects_unknown_project_edit_mode(tmp_path: Path):
+    spec = _spec()
+    spec["project_edit"]["mode"] = "merge"
+
+    result = save_commit(spec, root=tmp_path)
+
+    assert not result.ok
+    assert result.error == "project_edit.mode must be auto, append, or replace"
+    assert not (tmp_path / "sessions").exists()
+
+
+def test_save_commit_rejects_retention_without_note(tmp_path: Path):
+    spec = _spec()
+    spec.pop("note")
+    spec["retention"] = {"decision": "new"}
+
+    result = save_commit(spec, root=tmp_path)
+
+    assert not result.ok
+    assert result.error == "retention requires note"
+    assert not (tmp_path / "sessions").exists()
+
+
+def test_save_commit_rejects_retention_for_seed_note(tmp_path: Path):
+    spec = _spec()
+    spec["note_kind"] = "seed"
+    spec["retention"] = {"decision": "new"}
+
+    result = save_commit(spec, root=tmp_path)
+
+    assert not result.ok
+    assert result.error == "retention requires correction or reflection note"
+    assert not (tmp_path / "sessions").exists()
 
 
 def test_existing_different_session_file_refuses_to_clobber(tmp_path: Path):

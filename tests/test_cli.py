@@ -16,6 +16,56 @@ def test_cli_note_add_and_garden(tmp_path: Path, capsys):
     assert "Memento gardening digest" in capsys.readouterr().out
 
 
+def test_cli_note_add_accepts_retention_judgment(tmp_path: Path, capsys):
+    code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "note-add",
+            "--sess",
+            "sess_cli",
+            "--kind",
+            "correction",
+            "--decision",
+            "false-positive",
+            "--repair",
+            "ranking matched generic words only",
+            "--covered-note-id",
+            "sess_old.note.11111111",
+            "Situation: publish prep\nNote: do not count unrelated retrieval as coverage",
+        ]
+    )
+
+    events = [json.loads(line) for line in (tmp_path / "retention_log.jsonl").read_text(encoding="utf-8").splitlines()]
+
+    assert code == 0
+    assert "applied" in capsys.readouterr().out
+    assert events[0]["decision"] == "false-positive"
+    assert events[0]["repair"] == "ranking matched generic words only"
+    assert events[0]["covered_note_id"] == "sess_old.note.11111111"
+
+
+def test_cli_note_add_rejects_seed_retention_judgment(tmp_path: Path, capsys):
+    code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "note-add",
+            "--sess",
+            "sess_cli",
+            "--kind",
+            "seed",
+            "--decision",
+            "new",
+            "Situation: import\nNote: seed data",
+        ]
+    )
+
+    assert code == 2
+    assert "retention overrides require correction or reflection notes" in capsys.readouterr().out
+    assert not (tmp_path / "retention_log.jsonl").exists()
+
+
 def test_cli_global_agent_writes_marker_metadata(tmp_path: Path, capsys):
     code = main(
         [
@@ -214,6 +264,76 @@ def test_cli_project_edit_writes_adjacent_memory(tmp_path: Path, capsys):
     assert code == 0
     assert "applied" in output
     assert "- Added project memory support." in text
+
+
+def test_cli_project_edit_append_mode_preserves_worklog(tmp_path: Path, capsys):
+    root = tmp_path / ".memento"
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "memory.md").write_text(
+        "# Project Memory\n\n"
+        "## Worklog\n\n"
+        "<!-- delta:sess_old.project.11111111 agent=codex ts=2026-06-17T00:00:00Z -->\n"
+        "- Existing delta.\n",
+        encoding="utf-8",
+    )
+
+    code = main(
+        [
+            "--root",
+            str(root),
+            "project-edit",
+            "--project",
+            str(project),
+            "--sess",
+            "sess_abcd",
+            "--section",
+            "## Worklog",
+            "--append",
+            "- New delta.",
+        ]
+    )
+
+    text = (project / "memory.md").read_text(encoding="utf-8")
+    assert code == 0
+    assert "applied" in capsys.readouterr().out
+    assert "- Existing delta." in text
+    assert "- New delta." in text
+
+
+def test_cli_project_edit_auto_rejects_ambiguous_replace(tmp_path: Path, capsys):
+    root = tmp_path / ".memento"
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "memory.md").write_text(
+        "# Project Memory\n\n"
+        "## Worklog\n\n"
+        "<!-- delta:sess_old.project.11111111 agent=codex ts=2026-06-17T00:00:00Z -->\n"
+        "- Existing delta.\n",
+        encoding="utf-8",
+    )
+
+    code = main(
+        [
+            "--root",
+            str(root),
+            "project-edit",
+            "--project",
+            str(project),
+            "--sess",
+            "sess_abcd",
+            "--section",
+            "## Worklog",
+            "- New delta.",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    text = (project / "memory.md").read_text(encoding="utf-8")
+    assert code == 2
+    assert "--append or --replace" in output
+    assert "- Existing delta." in text
+    assert "- New delta." not in text
 
 
 def test_cli_load_can_include_project_memory(tmp_path: Path, capsys):

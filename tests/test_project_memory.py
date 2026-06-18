@@ -101,6 +101,7 @@ def test_project_edit_replaces_old_marker_before_flow_start(tmp_path: Path):
         project=project,
         section="## State",
         flow_start="2026-06-17T01:00:00Z",
+        mode="replace",
     )
 
     text = memory.read_text(encoding="utf-8")
@@ -135,3 +136,64 @@ def test_project_edit_preserves_marker_after_flow_start(tmp_path: Path):
     assert "concurrent-edit reconcile" in text
     assert "- Concurrent state." in text
     assert "- Current state." in text
+
+
+def test_project_edit_append_mode_adds_delta_without_replacing_existing_body(tmp_path: Path):
+    root = tmp_path / ".memento"
+    project = tmp_path / "project"
+    memory = ensure_project_memory(project)
+    memory.write_text(
+        "# Project Memory\n\n"
+        "## Key Decisions\n\n"
+        "## Worklog\n\n"
+        "<!-- delta:sess_old.project.11111111 agent=codex ts=2026-06-17T00:00:00Z -->\n"
+        "- Existing delta.\n",
+        encoding="utf-8",
+    )
+
+    applied, marker = project_edit(
+        "- New delta.",
+        sess="sess_abcd",
+        root=root,
+        project=project,
+        section="## Worklog",
+        mode="append",
+    )
+
+    text = memory.read_text(encoding="utf-8")
+    assert applied is True
+    assert marker in text
+    assert "concurrent-edit reconcile" not in text
+    assert "- Existing delta." in text
+    assert "- New delta." in text
+
+
+def test_project_edit_auto_fails_before_dropping_existing_delta_markers(tmp_path: Path):
+    root = tmp_path / ".memento"
+    project = tmp_path / "project"
+    memory = ensure_project_memory(project)
+    memory.write_text(
+        "# Project Memory\n\n"
+        "## Key Decisions\n\n"
+        "## Worklog\n\n"
+        "<!-- delta:sess_old.project.11111111 agent=codex ts=2026-06-17T00:00:00Z -->\n"
+        "- Existing delta.\n",
+        encoding="utf-8",
+    )
+
+    try:
+        project_edit(
+            "- New delta.",
+            sess="sess_abcd",
+            root=root,
+            project=project,
+            section="## Worklog",
+        )
+    except ValueError as exc:
+        assert "--append or --replace" in str(exc)
+    else:
+        raise AssertionError("project_edit should reject an ambiguous replacement")
+
+    text = memory.read_text(encoding="utf-8")
+    assert "- Existing delta." in text
+    assert "- New delta." not in text

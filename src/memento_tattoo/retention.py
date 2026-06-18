@@ -46,7 +46,7 @@ def recurrence_counts(*, root: Path) -> dict[str, int]:
     counts: dict[str, int] = {}
     for event in read_retention_events(root=root):
         if event.get("decision") in _REPEAT_DECISIONS:
-            note_id = event.get("note_id")
+            note_id = event.get("covered_note_id") or event.get("note_id")
             if note_id:
                 counts[note_id] = counts.get(note_id, 0) + 1
     return counts

@@ -9,6 +9,7 @@ from .doctor import run_doctor
 from .garden import build_digest
 from ._time import now_iso
 from .recall import render_ranked_notes
+from .retention import DECISIONS
 from .write_through import note_add, project_edit, tattoo_add
 
 
@@ -21,6 +22,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     note = subparsers.add_parser("note-add", help="append a checked lesson note")
     note.add_argument("--sess", required=True)
     note.add_argument("--kind", choices=["correction", "reflection", "seed"], default="reflection")
+    note.add_argument("--decision", choices=DECISIONS, default=None, help="override the checked retrieval decision")
+    note.add_argument("--repair", default="", help="short description of the repair or judgment")
+    note.add_argument("--covered-note-id", default=None, help="existing lesson note id this note repaired or should have matched")
     note.add_argument("text")
 
     tattoo = subparsers.add_parser("tattoo-add", help="append a promoted lesson")
@@ -37,6 +41,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     project.add_argument("--sess", required=True)
     project.add_argument("--section", default="## State")
     project.add_argument("--flow-start", default=None)
+    project_mode = project.add_mutually_exclusive_group()
+    project_mode.add_argument("--append", action="store_true", help="append this body to an accumulating section")
+    project_mode.add_argument("--replace", action="store_true", help="replace the section intentionally")
     project.add_argument("text")
 
     garden = subparsers.add_parser("garden", help="emit a read-only gardening digest")
@@ -79,7 +86,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     root = Path(args.root).resolve() if args.root else Path.cwd() / "memento"
 
     if args.command == "note-add":
-        applied, marker = note_add(args.text, sess=args.sess, root=root, kind=args.kind, agent=args.agent)
+        if args.kind == "seed" and (args.decision is not None or args.repair or args.covered_note_id is not None):
+            print("error: retention overrides require correction or reflection notes")
+            return 2
+        applied, marker = note_add(
+            args.text,
+            sess=args.sess,
+            root=root,
+            kind=args.kind,
+            agent=args.agent,
+            decision=args.decision,
+            repair=args.repair,
+            covered_note_id=args.covered_note_id,
+        )
         print(f"{'applied' if applied else 'skipped (already applied)'} {marker}")
         return 0
 
@@ -89,15 +108,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.command == "project-edit":
-        applied, marker = project_edit(
-            args.text,
-            sess=args.sess,
-            root=root,
-            project=Path(args.project),
-            section=args.section,
-            flow_start=args.flow_start,
-            agent=args.agent,
-        )
+        mode = "append" if args.append else "replace" if args.replace else "auto"
+        try:
+            applied, marker = project_edit(
+                args.text,
+                sess=args.sess,
+                root=root,
+                project=Path(args.project),
+                section=args.section,
+                flow_start=args.flow_start,
+                agent=args.agent,
+                mode=mode,
+            )
+        except ValueError as exc:
+            print(f"error: {exc}")
+            return 2
         print(f"{'applied' if applied else 'skipped (already applied)'} {marker}")
         return 0
 

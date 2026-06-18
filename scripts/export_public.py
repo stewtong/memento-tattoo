@@ -42,7 +42,11 @@ def export_public(destination: Path, *, source_root: Optional[Path] = None) -> s
             raise FileNotFoundError(src)
         dst = destination / entry
         if src.is_dir():
-            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"))
+            shutil.copytree(
+                src,
+                dst,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info", "memory-layer-judgment-spec.md"),
+            )
             copied.update(_relative_files(dst, destination))
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)

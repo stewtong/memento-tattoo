@@ -35,7 +35,13 @@ Required sections:
 - Note: what changed, what matters now, and what a future agent should not rediscover.
 ```
 
-`project-edit` updates a named `##` section under the Memento lock. If the caller provides `--flow-start`, it preserves the previous same-section body under a `concurrent-edit reconcile` block only when the section contains a marker at or after that timestamp. Markers without timestamps are preserved conservatively.
+`project-edit` updates a named `##` section under the Memento lock. It has three modes:
+
+- default `auto`: replace only when doing so will not silently drop existing delta markers; with `--flow-start`, preserve concurrent same-section edits under a `concurrent-edit reconcile` block
+- `--append`: add a new delta to an accumulating section such as a worklog
+- `--replace`: intentionally rewrite a section, typically for current-state snapshots such as `## State`
+
+Markers without timestamps are preserved conservatively when `--flow-start` is used.
 
 The first implementation keeps parsing deliberately simple. It recognizes adjacent bullet pairs:
 
@@ -46,7 +52,15 @@ The first implementation keeps parsing deliberately simple. It recognizes adjace
 
 ## Tattoos
 
-Tattoos are promoted lessons. A tattoo should be broader and more durable than the original situation that produced it. The package stores them in `tattoos.md` and includes them in recall ranking.
+Tattoos are scarce promoted lessons intended to be visible before broad classes of future action. A tattoo is not a good tip, a summary, or a project fact.
+
+Unlike project `memory.md` and `notes.md`, tattoos are intended to be loaded at startup. They pay an always-on context cost, so promotion needs a stricter test:
+
+```text
+If this had been loaded at the beginning of the session, would it have dramatically improved the course of action?
+```
+
+Promote only when the lesson is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule. Tattoo promotion still requires explicit user approval before running `tattoo-add`.
 
 ## Sessions
 
@@ -84,11 +98,44 @@ Run `rebuild` to refresh them or `rebuild --check` to detect drift.
 
 It is not a transaction. If a later verification fails, earlier durable writes remain in place and are reported in the result.
 
+The agent still performs the judgment pass before writing the spec. A typical spec contains the session summary, an optional note, optional retention judgment fields, optional project memory update, optional registry update, and verify strings.
+
+Project memory updates can include `"mode": "auto"`, `"mode": "append"`, or `"mode": "replace"` inside `project_edit`. Use append for accumulating sections and replace for intentional current-state rewrites.
+
+Retention judgment fields:
+
+```json
+{
+  "retention": {
+    "decision": "existing-repaired",
+    "repair": "added verification and complete aliases",
+    "covered_note_id": "sess_old.note.11111111"
+  }
+}
+```
+
+Use `retention.decision` when the agent has better context than the retrieval classifier. Use `covered_note_id` to attach a repeat miss or repair to the lesson that should have fired, rather than only to the newly written note.
+
 ## Checked Retrieval
 
 When adding a `correction` or `reflection` note, the package first ranks existing notes for the new situation. It then records whether the system found a strong existing cover or whether the situation appears new.
 
 This makes repeated correction visible. If the same lesson was already present but did not fire, that is not just a new note; it is evidence that the retrieval trigger may need repair.
+
+By default, `note-add` records the CLI's suggested decision. Agents can override that decision:
+
+```text
+memento-tattoo --root <path> note-add \
+  --sess <sess_id> \
+  --kind correction \
+  --decision existing-repaired \
+  --repair "added verification and complete aliases" \
+  --covered-note-id sess_old.note.11111111 \
+  "Situation: repeating an unverified completion claim
+Note: strengthened the completion-check lesson so future claims load the proof-command rule."
+```
+
+This keeps the CLI mechanical while letting the agent remain the judge.
 
 ## Retention Log
 
@@ -101,6 +148,8 @@ This makes repeated correction visible. If the same lesson was already present b
 - written note id
 - ranked candidates
 - suggested decision
+- optional covered note id
+- optional repair note
 - review flag
 
 The core decisions are:

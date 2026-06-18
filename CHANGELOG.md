@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Adds guarded `project-edit` modes: default `auto`, explicit `--append`, and explicit `--replace`.
+- Documents selective loading, agent judgment, and the stricter tattoo promotion bar.
+
 ## 0.1.0 - 2026-06-17
 
 - Initial reference implementation.

@@ -60,6 +60,36 @@ def replace_section(text: str, section: str, body: str, marker: str, *, preserve
     return "\n\n".join(parts).rstrip() + "\n"
 
 
+def append_section(text: str, section: str, body: str, marker: str) -> str:
+    normalized_section = section.strip()
+    if not normalized_section.startswith("## "):
+        raise ValueError("section must be a markdown h2 such as '## State'")
+
+    match = re.search(rf"(?m)^{re.escape(normalized_section)}\s*$", text)
+    new_body = f"{marker}\n{body.rstrip()}"
+    if not match:
+        replacement = f"{normalized_section}\n\n{new_body}\n"
+        prefix = text.rstrip()
+        return f"{prefix}\n\n{replacement}" if prefix else replacement
+
+    next_match = SECTION_RE.search(text, match.end())
+    start = match.start()
+    end = next_match.start() if next_match else len(text)
+    existing_section = text[match.end() : end].strip()
+    section_body = f"{existing_section}\n\n{new_body}" if existing_section else new_body
+    replacement = f"{normalized_section}\n\n{section_body}\n"
+    prefix = text[:start].rstrip()
+    suffix = text[end:].lstrip("\n")
+
+    parts = []
+    if prefix:
+        parts.append(prefix)
+    parts.append(replacement.rstrip())
+    if suffix:
+        parts.append(suffix.rstrip())
+    return "\n\n".join(parts).rstrip() + "\n"
+
+
 def extract_section_body(text: str, section: str) -> str:
     normalized_section = section.strip()
     match = re.search(rf"(?m)^{re.escape(normalized_section)}\s*$", text)
@@ -68,6 +98,15 @@ def extract_section_body(text: str, section: str) -> str:
     next_match = SECTION_RE.search(text, match.end())
     end = next_match.start() if next_match else len(text)
     return text[match.end() : end].strip()
+
+
+def delta_note_ids(text: str) -> set[str]:
+    ids: set[str] = set()
+    for line in text.splitlines():
+        marker = parse_delta_marker(line)
+        if marker is not None:
+            ids.add(marker.note_id)
+    return ids
 
 
 def section_changed_since(section_text: str, flow_start: str | None) -> bool:

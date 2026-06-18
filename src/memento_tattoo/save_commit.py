@@ -7,11 +7,23 @@ from typing import Any
 from .config import paths_for
 from .rebuild import rebuild
 from .registry import drain, registry_queue
+from .retention import DECISIONS
 from .session_store import render_session_block, write_session_block
 from .write_through import note_add, project_edit, tattoo_add
 
 
-_ALLOWED_KEYS = {"sess", "agent", "session", "note", "note_kind", "tattoo", "project_edit", "registry_delta", "verify"}
+_ALLOWED_KEYS = {
+    "sess",
+    "agent",
+    "session",
+    "note",
+    "note_kind",
+    "retention",
+    "tattoo",
+    "project_edit",
+    "registry_delta",
+    "verify",
+}
 
 
 @dataclass(frozen=True)
@@ -81,7 +93,17 @@ def save_commit(
         steps.append(StepResult("session", True, session_path))
 
         if spec.get("note"):
-            note_add(spec["note"], sess=sess, root=paths.root, kind=spec.get("note_kind", "reflection"), agent=agent)
+            retention = spec.get("retention") or {}
+            note_add(
+                spec["note"],
+                sess=sess,
+                root=paths.root,
+                kind=spec.get("note_kind", "reflection"),
+                agent=agent,
+                decision=retention.get("decision"),
+                repair=retention.get("repair", ""),
+                covered_note_id=retention.get("covered_note_id"),
+            )
             touched.append(paths.notes)
             steps.append(StepResult("note", True, paths.notes))
 
@@ -101,6 +123,7 @@ def save_commit(
                 section=project_spec.get("section", "## State"),
                 flow_start=project_spec.get("flow_start"),
                 agent=agent,
+                mode=project_spec.get("mode", "auto"),
             )
             touched.append(project_path / "memory.md")
             steps.append(StepResult("project_edit", True, project_path / "memory.md"))
@@ -170,6 +193,26 @@ def _validate(spec: dict[str, Any]) -> str:
     registry_delta = spec.get("registry_delta")
     if registry_delta and registry_delta.get("action") not in {"add", "update", "archive"}:
         return "registry_delta.action must be add, update, or archive"
+    project_edit_spec = spec.get("project_edit")
+    if project_edit_spec:
+        mode = project_edit_spec.get("mode", "auto")
+        if mode not in {"auto", "append", "replace"}:
+            return "project_edit.mode must be auto, append, or replace"
+    retention = spec.get("retention")
+    if retention:
+        if not isinstance(retention, dict):
+            return "retention must be an object"
+        if not spec.get("note"):
+            return "retention requires note"
+        if spec.get("note_kind", "reflection") == "seed":
+            return "retention requires correction or reflection note"
+        allowed_retention = {"decision", "repair", "covered_note_id"}
+        unknown_retention = sorted(set(retention) - allowed_retention)
+        if unknown_retention:
+            return f"retention unknown keys: {', '.join(unknown_retention)}"
+        decision = retention.get("decision")
+        if decision and decision not in DECISIONS:
+            return "retention.decision must be new, existing-missed, existing-repaired, or false-positive"
     return ""
 
 

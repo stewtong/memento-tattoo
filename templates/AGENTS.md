@@ -14,9 +14,10 @@ Use this template to add a lightweight correction-retention loop to a repo. Adju
 ## Startup loading
 
 1. Read this instruction file.
-2. Read `memory.md` when the task is about this project.
-3. When the task has a recognizable situation name, search `memento/notes.md` and `memento/tattoos.md` for that name and close aliases before acting.
-4. Load only the lessons that could change the next action.
+2. Load `memento/tattoos.md` at startup when it exists.
+3. Read `memory.md` when the task is about this project.
+4. Do not automatically load all of `memento/notes.md`; search it first with `memento-tattoo load`, grep, or another local retrieval step.
+5. Load only the matching lessons that could change the next action.
 
 ## Correction handling
 
@@ -38,6 +39,26 @@ Use these retention decisions:
 - `existing-repaired`: a relevant lesson existed and was improved.
 - `false-positive`: retrieval suggested a lesson that should not count.
 
+## Session-end judgment
+
+When the user says "save work", "save memory", "remember this session", or a similar local command, do a judgment pass before writing anything.
+
+Scan the session and decide:
+
+- what belongs in the session record
+- whether project state changed enough to update `memory.md`
+- whether a correction or reflection should become a note
+- whether an existing note should be repaired instead of duplicated
+- whether there is a tattoo candidate worth proposing
+
+Use this test:
+
+```text
+What from this session should change a future action?
+```
+
+Do not dump the transcript. Most sessions should produce project memory and a session record, but no new note.
+
 ## Multi-agent writes
 
 Plain Markdown works best for one agent at a time, or for teams that already coordinate writes.
@@ -54,7 +75,15 @@ Use `new-id` for every save session. Do not invent session IDs by hand.
 
 Use `save-commit` when writing several memory surfaces from one session. It writes through the same locked commands and verifies by artifact.
 
+When the agent has better context than the retrieval classifier, pass retention judgment fields to `note-add` or `save-commit`:
+
+- `decision`: `new`, `existing-missed`, `existing-repaired`, or `false-positive`
+- `repair`: short explanation of what was repaired or why the judgment changed
+- `covered_note_id`: existing note id that should have applied or was repaired
+
 Use `registry-queue` for shared project summary updates, then run `drain`. If a drain cannot acquire the local lock, leave the queued delta in place for a later drain.
+
+Use `project-edit --append` for accumulating project memory sections such as worklogs. Use `project-edit --replace` when intentionally rewriting a current-state snapshot such as `## State`. Plain `project-edit` runs in guarded auto mode and should fail rather than silently drop existing delta markers.
 
 ## When to write notes
 
@@ -73,14 +102,25 @@ Do not write notes for:
 
 ## When to promote tattoos
 
-Propose a tattoo only when a note passes this bar:
+A tattoo is not a good tip, a summary, or a project fact. It is a scarce operating lesson intended to be visible before broad classes of future action.
 
-- it recurred or would have prevented a meaningful mistake
-- it applies beyond one file or one unusual moment
-- it can be written as a short imperative
-- loading it before a future task would change the next action
+Before proposing one, ask:
+
+```text
+If this had been loaded at the beginning of the session, would it have dramatically improved the course of action?
+```
+
+Propose a tattoo only when the answer is yes and the lesson is:
+
+- durable across unrelated future sessions
+- behavioral, not merely informational
+- broader than the project or file that produced it
+- short enough to load often
+- written as a declarative principle or compact rule
 
 Keep tattoos scarce. If everything is promoted, nothing is visible.
+
+Do not write a tattoo until the user explicitly approves the proposed wording. First surface the candidate and the reason it passes the bar.
 
 ## When to update project memory
 

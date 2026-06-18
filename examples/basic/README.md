@@ -29,7 +29,7 @@ aliases: correction, verification, duplicate, retention, complete
 ```
 
 4. The retention log records the decision as `existing-repaired`, which means a relevant lesson existed and was improved rather than treated as brand new.
-5. The broader operating rule is promoted to a tattoo:
+5. If the user approves the wording, the broader operating rule is promoted to a tattoo:
 
 ```markdown
 - Before claiming work is complete, run the command that proves it and read the output.

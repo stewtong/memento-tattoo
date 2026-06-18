@@ -65,7 +65,69 @@ memento/tattoos.md    = what must not be forgotten
 retention_log.jsonl   = whether the lesson surfaced when it mattered
 ```
 
+Modern coding agents already have memory surfaces: `AGENTS.md`, `CLAUDE.md`, rules files, auto-memory folders, hooks, and project docs. `memento-tattoo` is not trying to replace those. It gives them a correction-retention loop: capture the lesson, check whether it should already have fired, and keep the scarce operating principles visible before future action.
+
+Tattoo lessons are intended to be loaded at startup. Project `memory.md` and `memento/notes.md` should be searched first, then loaded only when they match the current task.
+
 The CLI in this repo is the reference implementation of that pattern. It is useful when you want checked writes, ranked recall, doctor checks, a read-only gardening digest, and optional local coordination for parallel agent sessions.
+
+## The agent is the judge
+
+`memento-tattoo` does not decide what matters by itself. The CLI writes, checks, recalls, and coordinates files. The agent decides what deserves to be written.
+
+At the end of a session, or when the user says something like "save work", the agent should scan the work just completed and decide:
+
+- what belongs in the session record
+- whether project state changed enough to update `memory.md`
+- whether a correction or reflection should become a note
+- whether an existing note should be repaired instead of duplicated
+- whether there is a tattoo candidate worth proposing
+
+This is a judgment pass, not a transcript dump. The useful question is:
+
+```text
+What from this session should change a future action?
+```
+
+Write to project `memory.md` when the project state changed: files changed, decisions were made, constraints were discovered, current status changed, or a future agent should not rediscover the same context. Use replacement for current-state snapshots and append mode for accumulating worklog sections.
+
+Write to `notes.md` when the session produced a reusable lesson: a correction that could recur, a mistake pattern the agent noticed, an existing lesson that needs better aliases, or an operating lesson that would change behavior in a similar future situation.
+
+A tattoo is not a good tip, a summary, or a project fact. It is a scarce operating lesson intended to be visible before broad classes of future action.
+
+Before proposing one, ask:
+
+```text
+If this had been loaded at the beginning of the session, would it have dramatically improved the course of action?
+```
+
+Propose a tattoo only when the answer is yes and the lesson is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule.
+
+Tattoo promotion requires explicit user approval before running `tattoo-add`. Different agents may need different local wording for this bar; some over-promote broad rules, while others under-promote unless recurrence is obvious.
+
+## How agents invoke the CLI
+
+The CLI is usually not typed by hand during normal agent work. Map natural-language commands into `AGENTS.md`, `CLAUDE.md`, or your agent runner's instruction file.
+
+Common mappings:
+
+```text
+"load memory"
+  -> load tattoos at startup, then run `memento-tattoo --root <memento_root> load --project <project_dir> --query "<task situation>"`
+
+"remember this"
+  -> run `memento-tattoo --root <memento_root> note-add --sess <sess_id> --kind correction "<lesson>"`
+
+"save work"
+  -> scan the session, reserve a session id, then call `session-add`, `project-edit`, `note-add`, and optionally propose `tattoo-add`
+
+"check memory"
+  -> run `memento-tattoo --root <memento_root> doctor --project <project_dir>`
+```
+
+If your agent runner supports hooks, hooks can call the same CLI commands. Useful hook points include session start (`load`), long-running checkpoints (`session-add` or `project-edit`), post-commit project summaries (`project-edit`), session end (the save-work judgment pass), and periodic maintenance (`garden` and `doctor`).
+
+Hooks can call the CLI, but hooks should not blindly promote tattoos. Promotion still needs agent judgment and explicit user approval.
 
 ## Failure loop example
 
@@ -146,6 +208,7 @@ EOF
 
 .venv/bin/memento-tattoo --root .tmp/demo-memento note-add --sess sess_demo --kind seed "$note_text"
 
+# If the user approves the promoted rule:
 .venv/bin/memento-tattoo --root .tmp/demo-memento tattoo-add --sess sess_demo "Before claiming work is complete, run the command that proves it and read the output."
 .venv/bin/memento-tattoo --root .tmp/demo-memento doctor --project .tmp/demo-project
 .venv/bin/memento-tattoo --root .tmp/demo-memento load --project .tmp/demo-project --query "claiming complete verification"
@@ -156,9 +219,9 @@ EOF
 Core loop:
 
 ```text
-memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] <text>
+memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] [--decision new|existing-missed|existing-repaired|false-positive] [--repair <text>] [--covered-note-id <note_id>] <text>
 memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
-memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] <text>
+memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] [--append|--replace] <text>
 memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
 ```
 
@@ -180,7 +243,9 @@ memento-tattoo --root <path> doctor [--project <project_dir>]...
 memento-tattoo --root <path> rebuild [--check]
 ```
 
-`seed` notes are imported without retention logging. `correction` and `reflection` notes run checked retrieval first and append one retention event only when the note write is new.
+`seed` notes are imported without retention logging. `correction` and `reflection` notes run checked retrieval first and append one retention event only when the note write is new. By default the retention event records the CLI's suggested decision; agents can override that judgment with `--decision`, `--repair`, and `--covered-note-id` when they have stronger context from the session.
+
+`project-edit` defaults to guarded `auto` mode. Auto mode replaces a section only when it will not silently drop existing delta markers, or preserves concurrent same-section edits when `--flow-start` shows another session wrote after the agent began. Use `--append` for accumulating worklog sections. Use `--replace` when intentionally rewriting a current-state snapshot such as `## State`.
 
 ## File layout
 

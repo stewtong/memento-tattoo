@@ -47,6 +47,19 @@ The agent does not need a perfect archive of every event. It needs a small, insp
 
 The model weights do not change. The working system does.
 
+## Agent judgment
+
+The agent is the judge. The files and CLI do not decide what matters; they preserve what the agent decides after reviewing the work.
+
+At the end of a session, the agent should scan what happened and decide:
+
+- what project state changed enough to update `memory.md`
+- whether a correction or reflection should become a note
+- whether an existing note should be repaired instead of duplicated
+- whether a lesson is strong enough to propose as a tattoo
+
+Most sessions should not produce a tattoo. Many sessions should not produce a note. The healthy default is to write only the material that should change a future action.
+
 ## Minimal local layout
 
 Start with plain files:
@@ -65,7 +78,7 @@ Use `project/memory.md` for state tied to one repo or project.
 
 Use `memento/notes.md` for provisional lessons. A note should include the situation, the lesson, and a few aliases that might help retrieval.
 
-Use `memento/tattoos.md` for promoted lessons. A tattoo should be short enough to load often and broad enough to apply across tasks.
+Use `memento/tattoos.md` for promoted lessons. A tattoo should be scarce, short enough to load often, and broad enough to apply across tasks.
 
 Use `memento/retention_log.jsonl` as an append-only record of checked retrieval decisions.
 
@@ -100,7 +113,7 @@ If a matching lesson already existed but did not affect your action, log that as
 
 If a lesson recurs across different situations, propose promoting it to a tattoo.
 
-Before starting a task with a recognizable situation name, search notes and tattoos for that situation.
+At startup, load tattoos when they exist. Before starting a task with a recognizable situation name, search notes and project memory for that situation, then load only the matches that could change the next action.
 
 Keep project memory beside the project. Put project-specific state close to the work it explains.
 
@@ -114,7 +127,8 @@ Promote a note to a tattoo only when it passes a higher bar:
 - It has recurred.
 - It applies beyond one narrow file or one unusual moment.
 - It would have changed future behavior if loaded earlier.
-- It can be written as a short imperative.
+- It would have dramatically improved the course of action if loaded at the beginning of the session.
+- It can be written as a declarative principle or compact rule.
 
 Do not promote everything. Tattoos are valuable because the layer refuses to become a dump.
 
