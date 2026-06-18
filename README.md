@@ -79,7 +79,7 @@ The basic example shows the loop this project is designed for:
 
 See [examples/basic/README.md](examples/basic/README.md) for the concrete walkthrough.
 
-## Multi-agent local writes
+## Advanced: multi-agent local writes
 
 Agent swarms and parallel coding sessions are normal now. `memento-tattoo` includes local coordination features for that shape of work: multiple agents can write to the same local memento root without relying on a human to serialize every save.
 
@@ -166,7 +166,7 @@ Advanced coordination:
 
 ```text
 memento-tattoo --root <path> --agent <agent_id> new-id
-memento-tattoo --root <path> --agent <agent_id> session-add --sess <sess_id> --date "2026-06-17 18:24" --topics "memento-oss,multi-agent" --significance medium --accomplished "Published docs polish" --started "none" --pending "none" --insights "none" --files "README.md; templates/AGENTS.md"
+memento-tattoo --root <path> --agent <agent_id> session-add ...
 memento-tattoo --root <path> --agent <agent_id> registry-queue --sess <sess_id> --action update --slug memento-oss "- Memento OSS - memento-oss/ - active"
 memento-tattoo --root <path> drain
 memento-tattoo --root <path> save-commit --spec <json>

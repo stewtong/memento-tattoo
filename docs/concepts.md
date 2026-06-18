@@ -52,6 +52,12 @@ Tattoos are promoted lessons. A tattoo should be broader and more durable than t
 
 Sessions are small Markdown save records in `memento/sessions/`. Agents should reserve a session id with `new-id` instead of inventing one by hand, then write one `session-add` record for the work they completed.
 
+Full command shape:
+
+```text
+memento-tattoo --root <path> --agent <agent_id> session-add --sess <sess_id> --date "2026-06-17 18:24" --topics "memento-oss,multi-agent" --significance medium --accomplished "Published docs polish" --started "none" --pending "none" --insights "none" --files "README.md; templates/AGENTS.md"
+```
+
 Generated indexes live at:
 
 ```text
