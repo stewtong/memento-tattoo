@@ -5,11 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from .agent import parse_delta_marker
 from .config import paths_for, project_memory_path
 
 
 TERM_STOPLIST = {"the", "and", "for", "that", "this", "with", "memory", "memento"}
-_DELTA_MARKER_RE = re.compile(r"<!--\s*delta:([^\s]+?)\s*-->")
+_DELTA_MARKER_RE = re.compile(r"<!--\s*delta:[^\n]*?-->")
 _FIELD_NAMES = "Situation|Note|Why|How to apply|tags|aliases|Superseded-by|review_after"
 
 
@@ -141,15 +142,16 @@ def _load_tattoos_file(path: Path) -> list[MementoNote]:
     chunks = re.split(r"(?m)(?=^<!--\s*delta:)", text)
     fallback = 1
     for chunk in chunks:
-        marker = _DELTA_MARKER_RE.search(chunk)
-        if not marker:
+        marker = parse_delta_marker(chunk)
+        marker_match = _DELTA_MARKER_RE.search(chunk)
+        if marker is None or marker_match is None:
             continue
-        body = chunk[marker.end() :].strip()
+        body = chunk[marker_match.end() :].strip()
         bullet = _first_bullet(body)
         if bullet:
             notes.append(
                 MementoNote(
-                    note_id=marker.group(1).strip(),
+                    note_id=marker.note_id,
                     source_name="tattoos.md",
                     situation="tattoo",
                     note=bullet,
@@ -161,12 +163,13 @@ def _load_tattoos_file(path: Path) -> list[MementoNote]:
 
 
 def _parse_delta_note(block: str, source_name: str) -> Optional[MementoNote]:
-    marker = _DELTA_MARKER_RE.search(block)
-    if not marker:
+    marker = parse_delta_marker(block)
+    marker_match = _DELTA_MARKER_RE.search(block)
+    if marker is None or marker_match is None:
         return None
-    body = block[marker.end() :].strip()
+    body = block[marker_match.end() :].strip()
     return MementoNote(
-        note_id=marker.group(1).strip(),
+        note_id=marker.note_id,
         source_name=source_name,
         situation=_extract_field(body, "Situation"),
         note=_extract_field(body, "Note"),

@@ -21,6 +21,25 @@ def test_load_notes_from_delta_blocks(tmp_path: Path):
     assert notes[0].review_after == "2026-09-01"
 
 
+def test_load_notes_strips_delta_marker_attributes(tmp_path: Path):
+    (tmp_path / "notes.md").write_text(
+        "<!-- delta:sess_one.note.11111111 agent=codex ts=2026-06-17T00:00:00Z -->\n"
+        "Situation: writing external docs\n"
+        "Note: scan for private names before publishing\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tattoos.md").write_text(
+        "# Tattoos\n\n"
+        "<!-- delta:sess_two.tattoo.22222222 agent=claude-code ts=2026-06-17T00:00:00Z -->\n"
+        "- Check the dominant category before trusting aggregate metrics.\n",
+        encoding="utf-8",
+    )
+
+    notes = load_memento_notes(tmp_path)
+
+    assert [note.note_id for note in notes] == ["sess_one.note.11111111", "sess_two.tattoo.22222222"]
+
+
 def test_rank_notes_prefers_alias_match(tmp_path: Path):
     (tmp_path / "notes.md").write_text(
         "<!-- delta:sess_one.note.11111111 -->\n"

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from pathlib import Path
 
+from .agent import parse_delta_marker
 from .config import project_memory_path
 
 
@@ -56,3 +58,35 @@ def replace_section(text: str, section: str, body: str, marker: str, *, preserve
     if suffix:
         parts.append(suffix.rstrip())
     return "\n\n".join(parts).rstrip() + "\n"
+
+
+def extract_section_body(text: str, section: str) -> str:
+    normalized_section = section.strip()
+    match = re.search(rf"(?m)^{re.escape(normalized_section)}\s*$", text)
+    if not match:
+        return ""
+    next_match = SECTION_RE.search(text, match.end())
+    end = next_match.start() if next_match else len(text)
+    return text[match.end() : end].strip()
+
+
+def section_changed_since(section_text: str, flow_start: str | None) -> bool:
+    if not flow_start:
+        return False
+    try:
+        flow_dt = datetime.fromisoformat(flow_start.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("flow_start must be ISO timestamp") from exc
+    for line in section_text.splitlines():
+        marker = parse_delta_marker(line)
+        if marker is None:
+            continue
+        if not marker.ts:
+            return True
+        try:
+            marker_dt = datetime.fromisoformat(marker.ts.replace("Z", "+00:00"))
+        except ValueError:
+            return True
+        if marker_dt >= flow_dt:
+            return True
+    return False

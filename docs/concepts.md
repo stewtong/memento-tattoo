@@ -7,12 +7,14 @@
 Notes are fast lesson captures. They usually come from a correction, reflection, or import. They live in `notes.md` as readable Markdown blocks with a provenance marker:
 
 ```markdown
-<!-- delta:sess_demo.note.11111111 -->
+<!-- delta:sess_demo.note.11111111 agent=codex ts=2026-06-17T18:24:58Z -->
 Situation: publishing a public repo
 Note: scan examples for private names, secret values, and local paths before publishing.
 aliases: oss, public, sanitize, release
 review_after: 2026-12-31
 ```
+
+Old markers without `agent=` or `ts=` still load. New writes include agent identity so several local sessions can leave provenance without changing the stable note id.
 
 ## Project Memory
 
@@ -33,7 +35,7 @@ Required sections:
 - Note: what changed, what matters now, and what a future agent should not rediscover.
 ```
 
-`project-edit` updates a named `##` section under the Memento lock. If the caller provides `--flow-start`, the first public implementation preserves the previous same-section body under a `concurrent-edit reconcile` block instead of overwriting it.
+`project-edit` updates a named `##` section under the Memento lock. If the caller provides `--flow-start`, it preserves the previous same-section body under a `concurrent-edit reconcile` block only when the section contains a marker at or after that timestamp. Markers without timestamps are preserved conservatively.
 
 The first implementation keeps parsing deliberately simple. It recognizes adjacent bullet pairs:
 
@@ -45,6 +47,36 @@ The first implementation keeps parsing deliberately simple. It recognizes adjace
 ## Tattoos
 
 Tattoos are promoted lessons. A tattoo should be broader and more durable than the original situation that produced it. The package stores them in `tattoos.md` and includes them in recall ranking.
+
+## Sessions
+
+Sessions are small Markdown save records in `memento/sessions/`. Agents should reserve a session id with `new-id` instead of inventing one by hand, then write one `session-add` record for the work they completed.
+
+Generated indexes live at:
+
+```text
+memento/sessions/index.md
+memento/sessions/index-recent.md
+```
+
+Run `rebuild` to refresh them or `rebuild --check` to detect drift.
+
+## Registry Queue
+
+`registry.md` is an optional compact index of project summaries. Agents write registry changes through `_queue/` first:
+
+```markdown
+<!-- registry-delta sess=sess_abcd action=update slug=memento-oss agent=codex ts=2026-06-17T18:24:58Z -->
+- Memento OSS - memento-oss/ - active
+```
+
+`drain` applies queued deltas under the root lock. Same-slug collisions are deterministic: the newest delta wins, loser files move to `_queue/conflicts/`, and the winner gets a `registry-conflict` comment.
+
+## Save Commit
+
+`save-commit --spec <json>` is a convenience driver for agents that want to update several surfaces in one checked sequence. It validates the spec before writing, then calls the same lower-level commands for sessions, notes, tattoos, project memory, registry queue/drain, and rebuild.
+
+It is not a transaction. If a later verification fails, earlier durable writes remain in place and are reported in the result.
 
 ## Checked Retrieval
 

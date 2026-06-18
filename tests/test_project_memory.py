@@ -79,3 +79,59 @@ def test_project_edit_preserves_changed_section_when_flow_start_is_stale(tmp_pat
     assert "concurrent-edit reconcile" in text
     assert "- Other agent state." in text
     assert "- Current agent state." in text
+
+
+def test_project_edit_replaces_old_marker_before_flow_start(tmp_path: Path):
+    root = tmp_path / ".memento"
+    project = tmp_path / "project"
+    memory = ensure_project_memory(project)
+    memory.write_text(
+        "# Project Memory\n\n"
+        "## Key Decisions\n\n"
+        "## State\n\n"
+        "<!-- delta:sess_other.project.11111111 agent=codex ts=2026-06-17T00:00:00Z -->\n"
+        "- Old state.\n",
+        encoding="utf-8",
+    )
+
+    project_edit(
+        "- Current state.",
+        sess="sess_abcd",
+        root=root,
+        project=project,
+        section="## State",
+        flow_start="2026-06-17T01:00:00Z",
+    )
+
+    text = memory.read_text(encoding="utf-8")
+    assert "concurrent-edit reconcile" not in text
+    assert "- Old state." not in text
+    assert "- Current state." in text
+
+
+def test_project_edit_preserves_marker_after_flow_start(tmp_path: Path):
+    root = tmp_path / ".memento"
+    project = tmp_path / "project"
+    memory = ensure_project_memory(project)
+    memory.write_text(
+        "# Project Memory\n\n"
+        "## Key Decisions\n\n"
+        "## State\n\n"
+        "<!-- delta:sess_other.project.11111111 agent=codex ts=2026-06-17T02:00:00Z -->\n"
+        "- Concurrent state.\n",
+        encoding="utf-8",
+    )
+
+    project_edit(
+        "- Current state.",
+        sess="sess_abcd",
+        root=root,
+        project=project,
+        section="## State",
+        flow_start="2026-06-17T01:00:00Z",
+    )
+
+    text = memory.read_text(encoding="utf-8")
+    assert "concurrent-edit reconcile" in text
+    assert "- Concurrent state." in text
+    assert "- Current state." in text

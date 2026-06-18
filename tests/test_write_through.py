@@ -15,6 +15,17 @@ def test_note_add_creates_root_and_is_idempotent(tmp_path: Path):
     assert marker in text
 
 
+def test_note_add_writes_agent_metadata(tmp_path: Path):
+    applied, marker = note_add("Situation: test\nNote: keep it", sess="sess_abcd", root=tmp_path, kind="seed", agent="Codex")
+
+    text = (tmp_path / "notes.md").read_text(encoding="utf-8")
+    assert applied is True
+    assert marker.startswith("<!-- delta:sess_abcd.note.")
+    assert "agent=codex" in marker
+    assert "ts=" in marker
+    assert marker in text
+
+
 def test_tattoo_add_writes_tattoos_file(tmp_path: Path):
     applied, marker = tattoo_add("Check the dominant category before trusting aggregate metrics.", sess="sess_abcd", root=tmp_path)
 

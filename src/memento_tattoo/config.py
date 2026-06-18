@@ -14,6 +14,10 @@ class MementoPaths:
     tattoos: Path
     retention_log: Path
     lock: Path
+    sessions: Path
+    reserved_ids: Path
+    queue: Path
+    registry: Path
 
 
 PathLike = Union[str, Path]
@@ -43,4 +47,8 @@ def paths_for(root: Optional[PathLike] = None) -> MementoPaths:
         tattoos=base / "tattoos.md",
         retention_log=base / "retention_log.jsonl",
         lock=base / ".memento.lock",
+        sessions=base / "sessions",
+        reserved_ids=base / ".reserved_ids",
+        queue=base / "_queue",
+        registry=base / "registry.md",
     )

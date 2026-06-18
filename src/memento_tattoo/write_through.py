@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import uuid
 import hashlib
+import os
 from pathlib import Path
 from typing import Optional, Tuple
 
+from .agent import format_delta_marker, parse_delta_marker, resolve_agent
 from .config import paths_for
 from .lock import memory_lock
-from .project_memory import ensure_project_memory, replace_section
+from .project_memory import ensure_project_memory, extract_section_body, replace_section, section_changed_since
 
 
 def _hash8(text: str) -> str:
@@ -15,22 +18,30 @@ def _hash8(text: str) -> str:
 
 def _atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
     tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)
 
 
-def _append_eof(path: Path, sess: str, kind: str, body: str) -> Tuple[bool, str]:
-    marker = f"<!-- delta:{sess}.{kind}.{_hash8(body)} -->"
+def _append_eof(path: Path, sess: str, kind: str, body: str, *, agent: str = "unknown") -> Tuple[bool, str]:
+    note_id = f"{sess}.{kind}.{_hash8(body)}"
+    marker = format_delta_marker(note_id, agent=agent)
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    if marker in existing:
-        return False, marker
+    if note_id in existing:
+        return False, _find_existing_marker(existing, note_id) or marker
     prefix = existing
     if prefix and not prefix.endswith("\n"):
         prefix += "\n"
     spacer = "\n" if prefix else ""
     _atomic_write(path, f"{prefix}{spacer}{marker}\n{body.rstrip()}\n")
     return True, marker
+
+
+def _find_existing_marker(text: str, note_id: str) -> str | None:
+    for line in text.splitlines():
+        if line.startswith("<!--") and f"delta:{note_id}" in line:
+            return line.strip()
+    return None
 
 
 def _first_situation_line(text: str) -> str:
@@ -42,6 +53,9 @@ def _first_situation_line(text: str) -> str:
 
 
 def _note_id_from_marker(marker: str) -> str:
+    parsed = parse_delta_marker(marker)
+    if parsed is not None:
+        return parsed.note_id
     return marker[len("<!-- delta:") : -len(" -->")]
 
 
@@ -51,12 +65,14 @@ def note_add(
     sess: str,
     root: Path,
     kind: str = "reflection",
+    agent: Optional[str] = None,
 ) -> Tuple[bool, str]:
     paths = paths_for(root)
+    agent_id = resolve_agent(agent)
 
     if kind == "seed":
         with memory_lock(paths.root):
-            return _append_eof(paths.notes, sess, "note", text)
+            return _append_eof(paths.notes, sess, "note", text, agent=agent_id)
 
     from ._time import now_iso
     from .retention import append_retention_event, classify
@@ -64,7 +80,7 @@ def note_add(
     situation = _first_situation_line(text)
     result = classify(situation, root=paths.root)
     with memory_lock(paths.root):
-        applied, marker = _append_eof(paths.notes, sess, "note", text)
+        applied, marker = _append_eof(paths.notes, sess, "note", text, agent=agent_id)
         if applied:
             append_retention_event(
                 {
@@ -85,15 +101,16 @@ def note_add(
     return applied, marker
 
 
-def tattoo_add(text: str, *, sess: str, root: Path) -> Tuple[bool, str]:
+def tattoo_add(text: str, *, sess: str, root: Path, agent: Optional[str] = None) -> Tuple[bool, str]:
     paths = paths_for(root)
+    agent_id = resolve_agent(agent)
     body = text.strip()
     if not body.startswith("- "):
         body = f"- {body}"
     with memory_lock(paths.root):
         if not paths.tattoos.exists():
             _atomic_write(paths.tattoos, "# Tattoos\n")
-        return _append_eof(paths.tattoos, sess, "tattoo", body)
+        return _append_eof(paths.tattoos, sess, "tattoo", body, agent=agent_id)
 
 
 def project_edit(
@@ -104,14 +121,23 @@ def project_edit(
     project: Path,
     section: str = "## State",
     flow_start: Optional[str] = None,
+    agent: Optional[str] = None,
 ) -> Tuple[bool, str]:
     paths = paths_for(root)
-    marker = f"<!-- delta:{sess}.project.{_hash8(section + body)} -->"
+    note_id = f"{sess}.project.{_hash8(section + body)}"
+    marker = format_delta_marker(note_id, agent=resolve_agent(agent))
     with memory_lock(paths.root):
         path = ensure_project_memory(project)
         existing = path.read_text(encoding="utf-8")
-        if marker in existing:
-            return False, marker
-        updated = replace_section(existing, section, body, marker, preserve_existing=bool(flow_start))
+        if note_id in existing:
+            return False, _find_existing_marker(existing, note_id) or marker
+        existing_section = extract_section_body(existing, section)
+        updated = replace_section(
+            existing,
+            section,
+            body,
+            marker,
+            preserve_existing=section_changed_since(existing_section, flow_start),
+        )
         _atomic_write(path, updated)
         return True, marker

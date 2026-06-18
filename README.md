@@ -33,6 +33,9 @@ The first release keeps the surface area narrow:
 - adjacent project `memory.md` action journals
 - append-only JSONL retention log
 - checked retrieval before adding correction/reflection notes
+- agent-signed provenance markers
+- collision-safe session IDs and session indexes
+- queued registry drain for shared project summaries
 - read-only gardening digest
 - simple doctor checks
 - local CLI, no service dependency
@@ -51,7 +54,17 @@ memento/
   retention_log.jsonl
 ```
 
-The CLI in this repo is the reference implementation of that pattern. It is useful when you want checked writes, ranked recall, doctor checks, and a read-only gardening digest.
+That plain-Markdown version is enough for a single agent, a lightly coordinated team, or a repo-local convention. It does not provide real concurrent-write protection.
+
+The CLI in this repo is the reference implementation of that pattern. It is useful when you want checked writes, ranked recall, collision-safe session IDs, local multi-agent write safety, doctor checks, and a read-only gardening digest.
+
+## Multi-agent local writes
+
+Agent swarms and parallel coding sessions are normal now. `memento-tattoo` includes local coordination features for that shape of work: multiple agents can write to the same local memento root without relying on a human to serialize every save.
+
+Short writes take an advisory file lock, session IDs are reserved before use, retries are idempotent, and shared registry updates go through a queue-and-drain path.
+
+This is designed for a local filesystem. Network filesystems and sync folders may not preserve the lock semantics.
 
 ## Failure loop example
 
@@ -135,6 +148,12 @@ EOF
 memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] <text>
 memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
 memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] <text>
+memento-tattoo --root <path> --agent <agent_id> new-id
+memento-tattoo --root <path> --agent <agent_id> session-add --sess <sess_id> --date "2026-06-17 18:24" --topics "memento-oss,multi-agent" --significance medium --accomplished "Published docs polish" --started "none" --pending "none" --insights "none" --files "README.md; templates/AGENTS.md"
+memento-tattoo --root <path> --agent <agent_id> registry-queue --sess <sess_id> --action update --slug memento-oss "- Memento OSS - memento-oss/ - active"
+memento-tattoo --root <path> drain
+memento-tattoo --root <path> rebuild [--check]
+memento-tattoo --root <path> save-commit --spec <json>
 memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
 memento-tattoo --root <path> garden [--today YYYY-MM-DD] [--promote-threshold N]
 memento-tattoo --root <path> doctor [--project <project_dir>]...
@@ -154,6 +173,12 @@ memento/
   notes.md
   tattoos.md
   retention_log.jsonl
+  registry.md
+  sessions/
+    sess_abcd.md
+    index.md
+    index-recent.md
+  _queue/
   .memento.lock
 ```
 
@@ -161,6 +186,9 @@ memento/
 - `memento/notes.md`: provisional lessons and corrections.
 - `memento/tattoos.md`: promoted lessons that should be broadly reusable.
 - `memento/retention_log.jsonl`: append-only record of checked retrieval decisions.
+- `memento/registry.md`: optional compact index of project summaries.
+- `memento/sessions/`: per-session save records and generated indexes.
+- `memento/_queue/`: durable registry deltas waiting for drain.
 - `memento/.memento.lock`: advisory lock for short write operations.
 
 ## Out of scope

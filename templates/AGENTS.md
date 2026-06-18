@@ -8,6 +8,8 @@ Use this template to add a lightweight correction-retention loop to a repo. Adju
 - `memento/notes.md`: provisional lessons, usually from corrections or reflections.
 - `memento/tattoos.md`: scarce promoted lessons that should change behavior across broad task classes.
 - `memento/retention_log.jsonl`: append-only record of checked retrieval decisions.
+- `memento/sessions/`: per-session save records and generated indexes.
+- `memento/registry.md`: optional compact project registry updated through `memento/_queue/`.
 
 ## Startup loading
 
@@ -35,6 +37,20 @@ Use these retention decisions:
 - `existing-missed`: a relevant lesson existed but did not affect the action.
 - `existing-repaired`: a relevant lesson existed and was improved.
 - `false-positive`: retrieval suggested a lesson that should not count.
+
+## Multi-agent writes
+
+Set an agent identity before writing:
+
+```bash
+export MEMENTO_AGENT=codex
+```
+
+Use `new-id` for every save session. Do not invent session IDs by hand.
+
+Use `save-commit` when writing several memory surfaces from one session. It writes through the same locked commands and verifies by artifact.
+
+Use `registry-queue` for shared project summary updates, then run `drain`. If a drain cannot acquire the local lock, leave the queued delta in place for a later drain.
 
 ## When to write notes
 
@@ -78,7 +94,7 @@ Keep project facts in project memory. Do not promote them into tattoos unless th
 Use this note shape:
 
 ```markdown
-<!-- delta:sess_example.note.shortid -->
+<!-- delta:sess_example.note.shortid agent=codex ts=2026-06-17T18:24:58Z -->
 Situation: publishing a public repo
 Note: scan examples for private names, secret values, and local paths before publishing.
 aliases: oss, public, sanitize, release
@@ -88,7 +104,7 @@ review_after: 2026-12-31
 Use this tattoo shape:
 
 ```markdown
-<!-- delta:sess_example.tattoo.shortid -->
+<!-- delta:sess_example.tattoo.shortid agent=codex ts=2026-06-17T18:24:58Z -->
 - Before sharing a package, prove it works from the built artifact in a clean workspace.
 ```
 

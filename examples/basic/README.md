@@ -45,3 +45,36 @@ From the repo root after installing the package:
 .venv/bin/memento-tattoo --root examples/basic/memento load --project examples/basic/project --query "claiming complete verification"
 .venv/bin/memento-tattoo --root examples/basic/memento garden
 ```
+
+## Two-agent local write example
+
+The CLI also supports several local agent sessions writing to the same memento root:
+
+```bash
+codex_sess=$(.venv/bin/memento-tattoo --root .tmp/demo-memento --agent codex new-id)
+claude_sess=$(.venv/bin/memento-tattoo --root .tmp/demo-memento --agent claude-code new-id)
+
+.venv/bin/memento-tattoo --root .tmp/demo-memento --agent codex note-add \
+  --sess "$codex_sess" \
+  --kind reflection \
+  "Situation: claiming complete
+Note: run the proof command before saying done."
+
+.venv/bin/memento-tattoo --root .tmp/demo-memento --agent claude-code project-edit \
+  --project .tmp/demo-project \
+  --sess "$claude_sess" \
+  --section "## State" \
+  --flow-start "2026-06-17T18:24:58Z" \
+  "- Situation: verification loop
+- Note: local project state was updated by a second agent."
+
+.venv/bin/memento-tattoo --root .tmp/demo-memento --agent codex registry-queue \
+  --sess "$codex_sess" \
+  --action update \
+  --slug demo-project \
+  "- Demo Project - .tmp/demo-project/ - active"
+
+.venv/bin/memento-tattoo --root .tmp/demo-memento drain
+```
+
+The note, project memory edit, and registry delta all go through local lock-protected or queued paths.

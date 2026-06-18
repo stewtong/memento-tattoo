@@ -19,6 +19,10 @@ def test_paths_for_uses_single_memento_root(tmp_path: Path):
     assert paths.tattoos == tmp_path / "tattoos.md"
     assert paths.retention_log == tmp_path / "retention_log.jsonl"
     assert paths.lock == tmp_path / ".memento.lock"
+    assert paths.sessions == tmp_path / "sessions"
+    assert paths.reserved_ids == tmp_path / ".reserved_ids"
+    assert paths.queue == tmp_path / "_queue"
+    assert paths.registry == tmp_path / "registry.md"
 
 
 def test_resolve_project_expands_to_absolute_path(tmp_path: Path):

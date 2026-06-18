@@ -69,6 +69,20 @@ Use `memento/tattoos.md` for promoted lessons. A tattoo should be short enough t
 
 Use `memento/retention_log.jsonl` as an append-only record of checked retrieval decisions.
 
+## Concurrency note
+
+The plain-Markdown pattern is intentionally easy to copy, but it is not a complete multi-agent coordination system by itself. It works best for one agent at a time, or for teams that are already coordinating writes.
+
+If you expect agent swarms, parallel coding sessions, or several tools writing to the same memory root concurrently, add real coordination:
+
+- a lock around short writes
+- collision-safe session IDs
+- idempotent markers
+- append-only or queued writes for shared summaries
+- a drain/rebuild step that verifies artifacts on disk
+
+Those coordination pieces are what the `memento-tattoo` CLI implements as the reference version of the pattern.
+
 ## Agent instructions
 
 Add instructions like these to your agent config, for example `AGENTS.md`, `CLAUDE.md`, or another repo-local instruction file:

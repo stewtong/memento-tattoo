@@ -46,6 +46,23 @@ def test_note_add_logs_checked_reflection(tmp_path: Path):
     assert events[0]["decision"] == "new"
 
 
+def test_note_add_retention_event_uses_stable_note_id_with_agent_metadata(tmp_path: Path):
+    applied, marker = note_add(
+        "Situation: publish prep\nNote: sanitize examples",
+        sess="sess_abcd",
+        root=tmp_path,
+        agent="codex",
+    )
+
+    events = read_retention_events(root=tmp_path)
+
+    assert applied is True
+    assert "agent=codex" in marker
+    assert events[0]["note_id"].startswith("sess_abcd.note.")
+    assert "agent=" not in events[0]["note_id"]
+    assert "ts=" not in events[0]["note_id"]
+
+
 def test_checked_note_replay_does_not_duplicate_retention_event(tmp_path: Path):
     text = "Situation: publish prep\nNote: sanitize examples"
 
