@@ -146,6 +146,7 @@ This makes repeated correction visible. A repeat miss is not just another note. 
 ## Guardrails
 
 - Keep tattoos scarce.
+- Review tattoos periodically and demote or cut ones that no longer change behavior. Scarcity is maintained over time, not just at promotion.
 - Keep project memory beside the project.
 - Keep logs append-only.
 - Prefer plain text that humans can inspect and repair.
