@@ -152,7 +152,7 @@ This is designed for a local filesystem. Network filesystems and sync folders ma
 - Memory should be plain text you can inspect, repair, and delete.
 - Project memory belongs next to the project, close to the work it explains.
 - Corrections matter more than transcripts.
-- Promotion should be scarce. The tattoo layer is valuable because it refuses to be everything.
+- Promotion should be scarce. The tattoo layer is valuable because it refuses to be everything. `tattoo-audit` flags promoted lessons that are due for a keep, demote, or cut review so the tattoo set does not grow without bound.
 
 ## Install from a checkout
 
@@ -231,6 +231,7 @@ Maintenance:
 memento-tattoo --root <path> doctor
 memento-tattoo --root <path> garden
 memento-tattoo --root <path> rebuild --check
+memento-tattoo --root <path> tattoo-audit  # flags promoted lessons due for keep/demote/cut review
 ```
 
 Advanced local coordination:
@@ -260,8 +261,10 @@ memento/
     sess_abcd.md
     index.md
     index-recent.md
+    archive/
   _queue/
   .memento.lock
+  .reserved_ids
 ```
 
 - `project/memory.md`: adjacent project action journal: key decisions, state, and work performed.
@@ -269,9 +272,10 @@ memento/
 - `memento/tattoos.md`: promoted lessons that should be broadly reusable.
 - `memento/retention_log.jsonl`: append-only record of checked retrieval decisions.
 - `memento/registry.md`: optional compact index of project summaries.
-- `memento/sessions/`: per-session save records and generated indexes.
+- `memento/sessions/`: per-session save records and generated indexes; `archive/` holds rotated-out session files (still counted for ID-collision safety).
 - `memento/_queue/`: durable registry deltas waiting for drain.
 - `memento/.memento.lock`: advisory lock for short write operations.
+- `memento/.reserved_ids`: short-lived session-ID reservations so parallel agents do not collide before a session file is written.
 
 ## Out of scope
 

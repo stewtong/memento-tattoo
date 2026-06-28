@@ -10,6 +10,7 @@ from .garden import build_digest
 from ._time import now_iso
 from .recall import render_ranked_notes
 from .retention import DECISIONS
+from .tattoo_audit import tattoo_audit_report
 from .write_through import note_add, project_edit, tattoo_add
 
 
@@ -65,6 +66,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     session.add_argument("--pending", default="none.")
     session.add_argument("--insights", default="none.")
     session.add_argument("--files", default="")
+
+    tattoo_audit_p = subparsers.add_parser("tattoo-audit", help="report tattoos due for review")
+    tattoo_audit_p.add_argument("--window-days", type=int, default=30, help="age threshold in days (default 30)")
 
     rebuild_parser = subparsers.add_parser("rebuild", help="rebuild generated session indexes")
     rebuild_parser.add_argument("--check", action="store_true")
@@ -128,6 +132,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.command == "load":
         print(render_ranked_notes(args.query, root=root, limit=args.limit, projects=[Path(item) for item in args.project]))
+        return 0
+
+    if args.command == "tattoo-audit":
+        print(tattoo_audit_report(root, window_days=args.window_days))
         return 0
 
     if args.command == "garden":

@@ -103,6 +103,14 @@ If this had been loaded at the beginning of the session, would it have dramatica
 
 Promote only when the lesson is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule. Tattoo promotion still requires explicit user approval before running `tattoo-add`.
 
+## Tattoo Audit
+
+`tattoo-audit` is a read-only maintenance command that flags promoted tattoos due for a keep, demote, or cut review. It is an age gate: a tattoo is flagged once it has gone longer than the review window (30 days by default) since it was promoted or since its last recorded review. The reference date comes from the tattoo's provenance marker, with a `reviewed:` watermark resetting the clock when a reviewer leaves one. A tattoo with no resolvable date, or a watermark that points at a session the audit cannot find, is also flagged so it gets a first look.
+
+Recurrence scoring is deliberately excluded from this command. Whether a tattoo has fired often enough to justify its always-on context cost is a semantic verdict, not a lexical match. A frequency count over raw note text would misclassify paraphrase matches and miss conceptual coverage, producing noisy signals in both directions. The design keeps `tattoo-audit` mechanical and fast, and leaves the keep or demote judgment to the Tier-2 reviewer with full context.
+
+The command produces no writes. Acting on its output requires explicit agent judgment and the same user-approval gate that governs initial promotion.
+
 ## Sessions
 
 Sessions are small Markdown save records in `memento/sessions/`. Agents should reserve a session id with `new-id` instead of inventing one by hand, then write one `session-add` record for the work they completed.

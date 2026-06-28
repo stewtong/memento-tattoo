@@ -4,6 +4,22 @@ from memento_tattoo.doctor import run_doctor
 from memento_tattoo.retention import append_retention_event
 
 
+# --- helpers for tattoo-audit doctor check ---
+
+def _seed_session(root: Path, sess: str, when: str) -> None:
+    sessions = root / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    (sessions / f"{sess}.md").write_text(
+        f"---\n[{sess} | {when} | codex | test | low]\n"
+        "Accomplished: x\nStarted: none\nPending: none\nInsights: none\nFiles: none\n---\n",
+        encoding="utf-8",
+    )
+
+
+def _seed_tattoos(root: Path, body: str) -> None:
+    (root / "tattoos.md").write_text("# Tattoos\n\n" + body, encoding="utf-8")
+
+
 def test_doctor_warns_on_empty_root(tmp_path: Path):
     ok, output = run_doctor(tmp_path)
 
@@ -152,3 +168,36 @@ def test_doctor_warns_on_registry_conflicts(tmp_path: Path):
     assert ok is True
     assert "registry-conflicts" in output
     assert "1" in output
+
+
+def test_doctor_warns_on_flagged_tattoos(tmp_path: Path):
+    """A tattoo with an old ts= marker produces a WARN (not fail) in doctor output."""
+    (tmp_path / "notes.md").write_text("Situation: x\nNote: y\n", encoding="utf-8")
+    append_retention_event({"decision": "new", "note_id": "sess_a.note.11111111"}, root=tmp_path)
+    # Anchor session is recent; tattoo marker is old -> flagged by audit_tattoos.
+    _seed_session(tmp_path, "sess_anch", "2026-06-17 10:00")
+    _seed_tattoos(
+        tmp_path,
+        "<!-- delta:sess_old.tattoo.aaaaaaaa agent=codex ts=2026-01-01T00:00:00Z -->\n"
+        "- Old tattoo bullet.\n",
+    )
+
+    ok, output = run_doctor(tmp_path)
+
+    # Must remain True (warn, not fail)
+    assert ok is True
+    # Warning line must report the count and point to tattoo-audit
+    assert "tattoo-lifecycle" in output
+    assert "tattoo-audit" in output
+    assert "1 tattoo" in output
+
+
+def test_doctor_no_tattoo_lifecycle_warn_when_tattoos_md_absent(tmp_path: Path):
+    """When tattoos.md does not exist the tattoo-lifecycle check emits nothing."""
+    (tmp_path / "notes.md").write_text("Situation: x\nNote: y\n", encoding="utf-8")
+    append_retention_event({"decision": "new", "note_id": "sess_a.note.11111111"}, root=tmp_path)
+    # No tattoos.md seeded; sessions dir also absent.
+
+    ok, output = run_doctor(tmp_path)
+
+    assert "tattoo-lifecycle" not in output

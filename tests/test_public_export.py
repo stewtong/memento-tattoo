@@ -42,6 +42,7 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert (export_root / "src/memento_tattoo/registry.py").exists()
     assert (export_root / "src/memento_tattoo/rebuild.py").exists()
     assert (export_root / "src/memento_tattoo/save_commit.py").exists()
+    assert (export_root / "src/memento_tattoo/tattoo_audit.py").exists()
     assert (export_root / "tests/test_agent.py").exists()
     assert (export_root / "tests/test_new_id.py").exists()
     assert (export_root / "tests/test_session_store.py").exists()

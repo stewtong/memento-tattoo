@@ -9,6 +9,7 @@ from .retention import read_retention_events
 from .rebuild import rebuild
 from .registry import _DELTA_RE
 from .session_store import load_sessions
+from .tattoo_audit import audit_tattoos
 
 
 def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool, str]:
@@ -84,6 +85,15 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
     conflicts = list((paths.queue / "conflicts").glob("*.registry.md")) if (paths.queue / "conflicts").exists() else []
     if conflicts:
         checks.append(("warn", "registry-conflicts", f"conflict files: {len(conflicts)}"))
+
+    if paths.tattoos.exists():
+        try:
+            flagged_count = sum(1 for c in audit_tattoos(root=paths.root) if c.flagged)
+        except Exception:
+            flagged_count = 0
+        if flagged_count:
+            noun = "tattoo" if flagged_count == 1 else "tattoos"
+            checks.append(("warn", "tattoo-lifecycle", f"{flagged_count} {noun} due for review (run tattoo-audit)"))
 
     ok = all(status != "fail" for status, _, _ in checks)
     lines = ["MEMENTO_TATTOO_DOCTOR"]

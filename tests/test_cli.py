@@ -359,6 +359,58 @@ def test_cli_load_can_include_project_memory(tmp_path: Path, capsys):
     assert "sanitized export tree" in output
 
 
+def test_cli_tattoo_audit_reports_aged_tattoo(tmp_path: Path, capsys):
+    # Seed an aged tattoo (ts in January, well outside 30-day window).
+    sessions = tmp_path / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    (sessions / "sess_anch.md").write_text(
+        "---\n[sess_anch | 2026-06-17 10:00 | codex | test | low]\n"
+        "Accomplished: x\nStarted: none\nPending: none\nInsights: none\nFiles: none\n---\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tattoos.md").write_text(
+        "# Tattoos\n\n"
+        "<!-- delta:sess_old.tattoo.aaaaaaaa agent=codex ts=2026-01-01T00:00:00Z -->\n"
+        "- Old aged tattoo bullet.\n",
+        encoding="utf-8",
+    )
+
+    code = main(["--root", str(tmp_path), "tattoo-audit"])
+
+    output = capsys.readouterr().out
+    assert code == 0
+    assert "Old aged tattoo bullet" in output
+
+
+def test_cli_tattoo_audit_window_days_flag(tmp_path: Path, capsys):
+    # Tattoo that is 7 days old; default window (30) does not flag it, but window=5 does.
+    sessions = tmp_path / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    (sessions / "sess_anch.md").write_text(
+        "---\n[sess_anch | 2026-06-17 10:00 | codex | test | low]\n"
+        "Accomplished: x\nStarted: none\nPending: none\nInsights: none\nFiles: none\n---\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tattoos.md").write_text(
+        "# Tattoos\n\n"
+        "<!-- delta:sess_x.tattoo.bbbbbbbb agent=codex ts=2026-06-10T00:00:00Z -->\n"
+        "- Seven day old tattoo.\n",
+        encoding="utf-8",
+    )
+
+    # Default window (30d): should not be flagged, report says "Nothing due"
+    code_default = main(["--root", str(tmp_path), "tattoo-audit"])
+    out_default = capsys.readouterr().out
+    assert code_default == 0
+    assert "Nothing due" in out_default
+
+    # Narrow window (5d): should flag it
+    code_narrow = main(["--root", str(tmp_path), "tattoo-audit", "--window-days", "5"])
+    out_narrow = capsys.readouterr().out
+    assert code_narrow == 0
+    assert "Seven day old tattoo" in out_narrow
+
+
 def test_cli_garden_defaults_to_today(tmp_path: Path, capsys, monkeypatch):
     import memento_tattoo.cli as cli
 
