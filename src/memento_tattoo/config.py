@@ -10,6 +10,7 @@ from typing import Optional, Union
 class MementoPaths:
     root: Path
     notes: Path
+    notes_archive: Path
     project: Path
     tattoos: Path
     retention_log: Path
@@ -43,6 +44,7 @@ def paths_for(root: Optional[PathLike] = None) -> MementoPaths:
     return MementoPaths(
         root=base,
         notes=base / "notes.md",
+        notes_archive=base / "notes_archive.md",
         project=base / "project.md",
         tattoos=base / "tattoos.md",
         retention_log=base / "retention_log.jsonl",

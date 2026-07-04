@@ -46,6 +46,9 @@ def load_memento_notes(root: Path, projects: Optional[list[Path]] = None) -> lis
     paths = paths_for(root)
     notes: list[MementoNote] = []
     notes.extend(_load_notes_file(paths.notes))
+    # Rotated-out notes live in the cold archive but must still rank and cover repeats,
+    # otherwise rotation would silently drop lessons from retrieval.
+    notes.extend(_load_notes_file(paths.notes_archive, "notes_archive.md"))
     notes.extend(_load_project_file(paths.project))
     for project in projects or []:
         notes.extend(_load_project_file(project_memory_path(project), source_name=f"{Path(project).name}/memory.md"))
@@ -102,14 +105,14 @@ def render_ranked_notes(
     return "\n".join(lines)
 
 
-def _load_notes_file(path: Path) -> list[MementoNote]:
+def _load_notes_file(path: Path, source_name: str = "notes.md") -> list[MementoNote]:
     if not path.exists():
         return []
     text = path.read_text(encoding="utf-8")
     blocks = re.split(r"(?m)(?=^<!--\s*delta:)", text)
     notes = []
     for block in blocks:
-        parsed = _parse_delta_note(block.strip(), "notes.md")
+        parsed = _parse_delta_note(block.strip(), source_name)
         if parsed is not None:
             notes.append(parsed)
     return notes

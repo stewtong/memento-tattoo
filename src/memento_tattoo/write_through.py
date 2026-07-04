@@ -12,8 +12,56 @@ from .lock import memory_lock
 from .project_memory import append_section, delta_note_ids, ensure_project_memory, extract_section_body, replace_section, section_changed_since
 
 
+# The notes file is what situation-recognition greps and what a save loads
+# contextually, so it must stay bounded. Rotated blocks are NOT lost: load_memento_notes
+# (and thus recall + retention's classify) reads notes.md + notes_archive.md, so a rotated
+# note still ranks and still covers a repeat. TARGET leaves headroom so the next note-add
+# does not immediately re-trip the line.
+HOT_NOTES_ROTATE_BYTES = 30 * 1024
+HOT_NOTES_TARGET_BYTES = 29 * 1024
+
+_DELTA_MARK = "<!-- delta:"
+
+
 def _hash8(text: str) -> str:
     return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()[:8]
+
+
+def rotate_hot_notes(hot_path: Path, archive_path: Path, *, threshold: Optional[int] = None, target: Optional[int] = None) -> int:
+    """Move the oldest delta-marked note blocks from the hot notes file to the cold
+    archive until the hot file is at or under `target` bytes. Returns blocks moved.
+
+    No-op (returns 0) when the hot file is missing, at/under `threshold`, or has no
+    delta-marked blocks. Always keeps at least the newest block, so one over-target
+    block never empties the file. Assumes any needed lock is already held; reads the
+    module byte limits at call time so callers/tests can override them."""
+    threshold = HOT_NOTES_ROTATE_BYTES if threshold is None else threshold
+    target = HOT_NOTES_TARGET_BYTES if target is None else target
+    if not hot_path.exists():
+        return 0
+    text = hot_path.read_text(encoding="utf-8")
+    if len(text.encode("utf-8")) <= threshold:
+        return 0
+    first = text.find(_DELTA_MARK)
+    if first == -1:
+        return 0  # all preamble, nothing rotatable
+    preamble, body = text[:first], text[first:]
+    starts = [i for i in range(len(body)) if body.startswith(_DELTA_MARK, i)]
+    blocks = [body[starts[i]:(starts[i + 1] if i + 1 < len(starts) else len(body))] for i in range(len(starts))]
+
+    kept = list(blocks)
+    moved: list[str] = []
+    while len(kept) > 1 and len((preamble + "".join(kept)).encode("utf-8")) > target:
+        moved.append(kept.pop(0))
+    if not moved:
+        return 0
+
+    _atomic_write(hot_path, preamble + "".join(kept))
+    existing = archive_path.read_text(encoding="utf-8") if archive_path.exists() else ""
+    if existing and not existing.endswith("\n"):
+        existing += "\n"
+    _atomic_write(archive_path, existing + "\n" + "".join(moved))
+    return len(moved)
 
 
 def _atomic_write(path: Path, text: str) -> None:
@@ -78,7 +126,9 @@ def note_add(
         if has_retention_judgment:
             raise ValueError("retention judgment requires correction or reflection note")
         with memory_lock(paths.root):
-            return _append_eof(paths.notes, sess, "note", text, agent=agent_id)
+            applied, marker = _append_eof(paths.notes, sess, "note", text, agent=agent_id)
+            rotate_hot_notes(paths.notes, paths.notes_archive)  # keep the hot file bounded
+        return applied, marker
 
     from ._time import now_iso
     from .retention import DECISIONS, append_retention_event, classify
@@ -107,6 +157,7 @@ def note_add(
             if covered_note_id:
                 event["covered_note_id"] = covered_note_id
             append_retention_event(event, root=paths.root, assume_locked=True)
+        rotate_hot_notes(paths.notes, paths.notes_archive)  # keep the hot file bounded (every writer)
     return applied, marker
 
 

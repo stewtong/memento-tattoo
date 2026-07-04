@@ -2,8 +2,7 @@
 
 `memento-tattoo` is a correction-retention loop that helps coding agents stop repeating corrected mistakes across sessions.
 
-If you want to understand or adapt the pattern, start with [IDEA.md](IDEA.md).
-If you want a working local CLI, install from source.
+If you want to understand or adapt the pattern, start with [IDEA.md](IDEA.md). If you want a working local CLI, install from source.
 
 `memento-tattoo` is modeled after Christopher Nolan's *Memento*.
 
@@ -17,142 +16,21 @@ In *Memento*, Leonard uses a tiered memory system: notes for quick observations,
 - project `memory.md` files are the Polaroids beside the work
 - tattoos are scarce promoted lessons that should be loaded before broad classes of action
 
-The point is not to remember everything. The point is to preserve the lessons that should change the next action.
-
 Generic memory stores context. `memento-tattoo` stores corrections that should alter future behavior.
-
-This repo is a reference implementation. Install from source.
 
 ## What it solves
 
 Most agent memory systems start by asking how much context can be recalled. `memento-tattoo` asks a narrower question: what correction would change the agent's next action?
 
-That makes memory a lightweight continuous-learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and the retention log checks whether the right lesson showed up when it mattered.
+That makes memory a lightweight continuous-learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and a retention log checks whether the right lesson showed up when it mattered.
 
-This reference implementation keeps the surface area narrow:
+## What you get
 
-- plain Markdown files for notes, project memory, tattoos, and retention logs
-- checked writes and ranked recall
-- doctor checks and read-only gardening
-- optional local coordination for parallel sessions
-- local CLI, no service dependency
-
-## Try the pattern without installing
-
-You do not need the CLI to try the idea. Copy [templates/AGENTS.md](templates/AGENTS.md) into a repo, adapt the paths, and start with three plain files:
-
-```text
-project/
-  memory.md
-
-memento/
-  notes.md
-  tattoos.md
-  retention_log.jsonl
-```
-
-That plain-Markdown version is enough for a single agent, a lightly coordinated team, or a repo-local convention. It does not provide real concurrent-write protection.
-
-The practical layers look like this:
-
-```text
-AGENTS.md / CLAUDE.md  = how the agent should behave
-project/memory.md     = what is going on here
-memento/notes.md      = what the work taught us
-memento/tattoos.md    = what must not be forgotten
-retention_log.jsonl   = whether the lesson surfaced when it mattered
-```
-
-Modern coding agents already have memory surfaces: `AGENTS.md`, `CLAUDE.md`, rules files, auto-memory folders, hooks, and project docs. `memento-tattoo` is not trying to replace those. It gives them a correction-retention loop: capture the lesson, check whether it should already have fired, and keep the scarce operating principles visible before future action.
-
-Tattoo lessons are intended to be loaded at startup. Project `memory.md` and `memento/notes.md` should be searched first, then loaded only when they match the current task.
-
-Plain Markdown is enough to try the pattern. The CLI adds checked writes, ranked recall, doctor checks, gardening, and optional local coordination for parallel sessions.
-
-## The agent is the judge
-
-`memento-tattoo` does not decide what matters by itself. The CLI writes, checks, recalls, and coordinates files. The agent decides what deserves to be written.
-
-At the end of a session, or when the user says something like "save work", the agent should scan the work just completed and decide:
-
-- what belongs in the session record
-- whether project state changed enough to update `memory.md`
-- whether a correction or reflection should become a note
-- whether an existing note should be repaired instead of duplicated
-- whether there is a tattoo candidate worth proposing
-
-This is a judgment pass, not a transcript dump. The useful question is:
-
-```text
-What from this session should change a future action?
-```
-
-Write to project `memory.md` when the project state changed: files changed, decisions were made, constraints were discovered, current status changed, or a future agent should not rediscover the same context. Project memory should summarize state beside the work it explains, not become a transcript log.
-
-Project memory can be replaced for current state or appended for worklog-style sections; the CLI guards against silent overwrites.
-
-Write to `notes.md` when the session produced a reusable lesson: a correction that could recur, a mistake pattern the agent noticed, an existing lesson that needs better aliases, or an operating lesson that would change behavior in a similar future situation.
-
-A tattoo is not a good tip, a summary, or a project fact. It is a scarce operating lesson intended to be visible before broad classes of future action.
-
-Before proposing one, ask:
-
-```text
-If this had been loaded at the beginning of the session, would it have dramatically improved the course of action?
-```
-
-Propose a tattoo only when the answer is yes and the lesson is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule.
-
-Tattoo promotion requires explicit user approval before running `tattoo-add`. Different agents may need different local wording for this bar; some over-promote broad rules, while others under-promote unless recurrence is obvious.
-
-## How agents invoke the CLI
-
-The CLI is usually not typed by hand during normal agent work. Map natural-language commands into `AGENTS.md`, `CLAUDE.md`, or your agent runner's instruction file.
-
-Common mappings:
-
-```text
-"load memory"
-  -> load tattoos at startup, then run `memento-tattoo --root <memento_root> load --project <project_dir> --query "<task situation>"`
-
-"remember this"
-  -> run `memento-tattoo --root <memento_root> note-add --sess <sess_id> --kind correction "<lesson>"`
-
-"save work"
-  -> scan the session, reserve a session id, then call `session-add`, `project-edit`, `note-add`, and optionally propose `tattoo-add`
-
-"check memory"
-  -> run `memento-tattoo --root <memento_root> doctor --project <project_dir>`
-```
-
-If your agent runner supports hooks, hooks can call the same CLI commands. Useful hook points include session start (`load`), long-running checkpoints (`session-add` or `project-edit`), post-commit project summaries (`project-edit`), session end (the save-work judgment pass), and periodic maintenance (`garden` and `doctor`).
-
-Hooks can call the CLI, but hooks should not blindly promote tattoos. Promotion still needs agent judgment and explicit user approval.
-
-## Failure loop example
-
-The basic example shows the loop this project is designed for:
-
-1. An agent claims a code change is complete without running the proof command.
-2. The user correction is captured as a note in [examples/basic/memento/notes.md](examples/basic/memento/notes.md).
-3. The retention log records that an existing verification lesson was repaired in [examples/basic/memento/retention_log.jsonl](examples/basic/memento/retention_log.jsonl).
-4. If the user approves the broader completion rule, it is promoted to [examples/basic/memento/tattoos.md](examples/basic/memento/tattoos.md).
-5. A later task can load the tattoo before claiming completion.
-
-See [examples/basic/README.md](examples/basic/README.md) for the concrete walkthrough.
-
-## Advanced: local coordination
-
-If you run parallel local agents, the CLI has coordination guardrails: advisory locks for short writes, reserved session IDs, idempotent markers, and a queued registry drain path.
-
-This is designed for a local filesystem. Network filesystems and sync folders may not preserve lock semantics. See [Concepts](docs/concepts.md) for the mechanics.
-
-## Design bets
-
-- Memory should be plain text you can inspect, repair, and delete.
-- Project memory belongs next to the project, close to the work it explains.
-- Corrections matter more than transcripts.
-- Promotion should be scarce. The tattoo layer is valuable because it refuses to be everything. `tattoo-audit` flags promoted lessons that are due for a keep, demote, or cut review so the tattoo set does not grow without bound.
+- **Checked retrieval with a retention log.** Every recall records whether the right lesson surfaced when it mattered, so you get recall of lessons, not just recall of events. This loop is the core differentiator.
+- **Situation-recognition recall.** Lessons are ranked for the current task, so a correction resurfaces the moment the situation has a name again.
+- **Scarce promotion with a lifecycle.** Tattoos stay rare, and `tattoo-audit` flags promoted lessons due for a keep, demote, or cut review so the set does not grow without bound.
+- **Plain-text memory you can inspect, repair, and delete.** Notes, project memory, and tattoos are Markdown files. No database, no service dependency.
+- **Optional local coordination for parallel agents.** Advisory locks, reserved session IDs, and a queued registry drain for concurrent local sessions.
 
 ## Install from a checkout
 
@@ -212,6 +90,72 @@ EOF
 .venv/bin/memento-tattoo --root .tmp/demo-memento load --project .tmp/demo-project --query "claiming complete verification"
 ```
 
+## Try the pattern without installing
+
+You do not need the CLI to try the idea. Copy [templates/AGENTS.md](templates/AGENTS.md) into a repo, adapt the paths, and create the plain Markdown files shown in [File layout](#file-layout): a project `memory.md` beside the work, plus `notes.md`, `tattoos.md`, and a retention log under a `memento/` root.
+
+That plain-Markdown version is enough for a single agent or a repo-local convention. It does not provide real concurrent-write protection. Modern coding agents already have memory surfaces (`AGENTS.md`, `CLAUDE.md`, rules files, auto-memory folders, hooks); `memento-tattoo` does not replace them, it gives them a correction-retention loop. The CLI adds checked writes, ranked recall, doctor checks, gardening, and optional local coordination.
+
+## The agent is the judge
+
+`memento-tattoo` does not decide what matters by itself. The CLI writes, checks, recalls, and coordinates files. The agent decides what deserves to be written.
+
+At the end of a session, or when the user says something like "save work", the agent scans the work just completed and decides what belongs in the session record, whether project `memory.md` should change, whether a correction should become a note or repair an existing one, and whether any lesson is a tattoo candidate. This is a judgment pass, not a transcript dump. The useful question is:
+
+```text
+What from this session should change a future action?
+```
+
+A tattoo is not a good tip, a summary, or a project fact. It is a scarce operating lesson meant to be visible before broad classes of future action. Propose one only when, had it been loaded at the start of the session, it would have dramatically improved the course of action, and the lesson is durable across unrelated sessions, behavioral rather than informational, broader than the file that produced it, and short enough to load often. Promotion requires explicit user approval before running `tattoo-add`.
+
+## How agents invoke the CLI
+
+The CLI is usually not typed by hand during normal agent work. Map natural-language commands into `AGENTS.md`, `CLAUDE.md`, or your agent runner's instruction file.
+
+Common mappings:
+
+```text
+"load memory"
+  -> load tattoos at startup, then run `memento-tattoo --root <memento_root> load --project <project_dir> --query "<task situation>"`
+
+"remember this"
+  -> run `memento-tattoo --root <memento_root> note-add --sess <sess_id> --kind correction "<lesson>"`
+
+"save work"
+  -> scan the session, reserve a session id, then call `session-add`, `project-edit`, `note-add`, and optionally propose `tattoo-add`
+
+"check memory"
+  -> run `memento-tattoo --root <memento_root> doctor --project <project_dir>`
+```
+
+If your agent runner supports hooks, hooks can call the same CLI commands: session start (`load`), long-running checkpoints (`session-add` or `project-edit`), post-commit summaries (`project-edit`), session end (the save-work judgment pass), and periodic maintenance (`garden` and `doctor`). Hooks should not blindly promote tattoos; promotion still needs agent judgment and explicit user approval.
+
+## Failure loop example
+
+The basic example shows the loop this project is designed for:
+
+1. An agent claims a code change is complete without running the proof command.
+2. The user correction is captured as a note in [examples/basic/memento/notes.md](examples/basic/memento/notes.md).
+3. The retention log records that an existing verification lesson was repaired in [examples/basic/memento/retention_log.jsonl](examples/basic/memento/retention_log.jsonl).
+4. If the user approves the broader completion rule, it is promoted to [examples/basic/memento/tattoos.md](examples/basic/memento/tattoos.md).
+5. A later task can load the tattoo before claiming completion.
+
+See [examples/basic/README.md](examples/basic/README.md) for the concrete walkthrough.
+
+## Advanced: local coordination
+
+If you run parallel local agents, the CLI has coordination guardrails: advisory locks for short writes, reserved session IDs, idempotent markers, and a queued registry drain path.
+
+This is designed for a local filesystem. Network filesystems and sync folders may not preserve lock semantics. See [Concepts](docs/concepts.md) for the mechanics.
+
+## Design bets
+
+- Memory should be plain text you can inspect, repair, and delete.
+- Project memory belongs next to the project, close to the work it explains.
+- Corrections matter more than transcripts.
+- Promotion should be scarce. The tattoo layer is valuable because it refuses to be everything. `tattoo-audit` flags promoted lessons that are due for a keep, demote, or cut review so the tattoo set does not grow without bound.
+- `note-add` keeps the hot `notes.md` bounded by rotating older blocks out to `notes_archive.md`; recall reads both files, so rotation stays non-lossy.
+
 ## CLI at a glance
 
 Examples include the shared `--root <path>` flag; add `--agent <agent_id>` when you want provenance for parallel sessions. These are abbreviated command shapes; see [Concepts](docs/concepts.md) for full options.
@@ -254,6 +198,7 @@ project/
 
 memento/
   notes.md
+  notes_archive.md
   tattoos.md
   retention_log.jsonl
   registry.md
@@ -269,6 +214,7 @@ memento/
 
 - `project/memory.md`: adjacent project action journal: key decisions, state, and work performed.
 - `memento/notes.md`: provisional lessons and corrections.
+- `memento/notes_archive.md`: older note blocks rotated out of the hot file; still read during recall.
 - `memento/tattoos.md`: promoted lessons that should be broadly reusable.
 - `memento/retention_log.jsonl`: append-only record of checked retrieval decisions.
 - `memento/registry.md`: optional compact index of project summaries.
@@ -301,12 +247,10 @@ Apache-2.0.
 .venv/bin/python -m build
 ```
 
-This development checkout can contain local planning, research, and memory artifacts. To create the public GitHub surface, export a clean tree:
+The repo ships to GitHub through an export script that produces a clean public tree:
 
 ```bash
 .venv/bin/python scripts/export_public.py .tmp/public-export
 ```
 
-Use the exported tree for public GitHub pushes. Do not publish this development checkout directly.
-
-This reference implementation is source-installable from GitHub.
+Publish from the exported tree.
