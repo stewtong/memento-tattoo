@@ -11,7 +11,18 @@ from .lock import memory_lock
 DECISIONS = ("new", "existing-missed", "existing-repaired", "false-positive")
 _REPEAT_DECISIONS = ("existing-missed", "existing-repaired")
 DEFAULT_MIN_SCORE = 60
+# A true same-lesson cover stands out above its vocabulary neighbors; a flat tie
+# (several unrelated notes scoring alike on generic-word overlap) is NOT a cover.
+# The top candidate must beat rank-2 by this factor to count as a cover...
 DOMINANCE_RATIO = 1.5
+# ...unless the top match is strong in ABSOLUTE terms. A high score means many
+# distinct terms matched (recall scores ~10/term + boosts) = real topical overlap,
+# not generic-word noise. A genuine cover can share a high score with a close
+# neighbor (ratio ~1.0), so the dominance ratio alone wrongly rejects it. A strong
+# absolute match is a cover regardless of a co-high neighbor. Kept conservative
+# (well above the 60 floor and a small flat tie) so a borderline overlap still logs
+# 'new' by default rather than reintroducing a false positive.
+STRONG_COVER_SCORE = 120
 
 
 def _append_line(path: Path, line: str) -> None:
@@ -82,7 +93,8 @@ def classify(
     top = candidates[0]["score"] if candidates else 0
     second = candidates[1]["score"] if len(candidates) > 1 else 0
     dominant = bool(candidates) and (len(candidates) == 1 or top >= DOMINANCE_RATIO * second)
-    has_cover = bool(candidates) and top >= min_score and dominant
+    strong = top >= STRONG_COVER_SCORE
+    has_cover = bool(candidates) and top >= min_score and (dominant or strong)
     return {
         "candidates": candidates,
         "has_cover": has_cover,

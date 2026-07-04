@@ -97,6 +97,31 @@ def registry_queue(
     return final
 
 
+APPLIED_KEEP = 100
+"""How many drained delta files to retain in applied/ as a provenance audit trail.
+Consumed deltas are kept for idempotency/history, but nothing bounded the dir, so it
+grew without limit. Keep the newest N; older ones are pure history and safe to drop."""
+
+
+def prune_applied(applied_dir: Path, keep: int = APPLIED_KEEP) -> int:
+    """Delete all but the `keep` most-recent files in applied/ (by mtime, name tiebreak).
+    Returns the number removed. No-op if the dir is missing or under the limit."""
+    if not applied_dir.exists():
+        return 0
+    files = [p for p in applied_dir.glob("*.registry.md") if p.is_file()]
+    if len(files) <= keep:
+        return 0
+    files.sort(key=lambda p: (p.stat().st_mtime, p.name))
+    removed = 0
+    for p in files[: len(files) - keep]:
+        try:
+            p.unlink()
+            removed += 1
+        except FileNotFoundError:
+            pass
+    return removed
+
+
 def drain(root: Path, timeout: float = 10.0) -> DrainResult:
     paths = paths_for(root)
     generated = build_generated_files(paths.root)
@@ -128,6 +153,7 @@ def drain(root: Path, timeout: float = 10.0) -> DrainResult:
                 for loser in [delta for group in losers.values() for delta in group]:
                     _move_delta(loser.path, paths.queue / "conflicts")
                     conflicts += 1
+            prune_applied(paths.queue / "applied")  # bound the provenance audit trail
     except LockTimeout:
         return DrainResult(skipped=True)
     return DrainResult(applied=applied, conflicts=conflicts, errors=tuple(errors))

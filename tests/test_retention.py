@@ -35,6 +35,32 @@ def test_classify_new_when_no_dominant_candidate(tmp_path: Path):
     assert result["suggested_decision"] == "new"
 
 
+def test_strong_cover_with_close_high_neighbor_suggests_existing_missed(tmp_path: Path):
+    # The real-world failure the dominance-ratio guard mis-handled: a genuine same-lesson
+    # cover scores high in absolute terms (many matched terms) but a vocabulary neighbor
+    # also scores high, so top/second is well under 1.5x. The old guard called this 'new'.
+    # A strong absolute match is a cover even when a neighbor is close.
+    (tmp_path / "notes.md").write_text(
+        "<!-- delta:sess_c1.note.cccccccc -->\n"
+        "Situation: configuring a kubernetes deployment rollout with replica readiness probe liveness ingress namespace selector affinity toleration\n"
+        "Note: the real covering lesson about deployment rollout\n\n"
+        "<!-- delta:sess_c2.note.dddddddd -->\n"
+        "Situation: kubernetes deployment rollout replica readiness probe liveness ingress namespace selector\n"
+        "Note: a different high-overlap vocabulary neighbor\n",
+        encoding="utf-8",
+    )
+    result = classify(
+        "kubernetes deployment rollout replica readiness probe liveness ingress namespace selector affinity toleration",
+        root=tmp_path,
+    )
+    top, second = result["candidates"][0], result["candidates"][1]
+    assert top["score"] < 1.5 * second["score"]  # co-high tie, not a dominance case
+    assert top["score"] >= 120  # strong absolute match
+    assert top["note_id"] == "sess_c1.note.cccccccc"
+    assert result["has_cover"] is True
+    assert result["suggested_decision"] == "existing-missed"
+
+
 def test_note_add_logs_checked_reflection(tmp_path: Path):
     applied, marker = note_add("Situation: publish prep\nNote: sanitize examples", sess="sess_new", root=tmp_path)
 

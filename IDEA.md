@@ -111,6 +111,8 @@ Before writing a correction or reflection note, search existing notes for a matc
 
 If a matching lesson already existed but did not affect your action, log that as an existing-missed retrieval.
 
+When a new note relates to an existing note or tattoo, link to it by id instead of restating its lesson. Reference the prior note rather than duplicating it.
+
 If a lesson recurs across different situations, propose promoting it to a tattoo.
 
 At startup, load tattoos when they exist. Before starting a task with a recognizable situation name, search notes and project memory for that situation, then load only the matches that could change the next action.

@@ -61,3 +61,31 @@ def test_double_drain_is_idempotent(tmp_path: Path):
     assert first.applied == 1
     assert second.applied == 0
     assert not list((tmp_path / "_queue").glob("*.registry.md"))
+
+
+def test_prune_applied_keeps_newest_and_deletes_older(tmp_path: Path):
+    import os
+    from memento_tattoo.registry import prune_applied
+    applied = tmp_path / "applied"
+    applied.mkdir()
+    for i in range(5):
+        p = applied / f"sess_{i}.proj.registry.md"
+        p.write_text(f"delta {i}", encoding="utf-8")
+        os.utime(p, (1000 + i, 1000 + i))
+    removed = prune_applied(applied, keep=3)
+    remaining = sorted(q.name for q in applied.glob("*.registry.md"))
+    assert removed == 2
+    assert remaining == ["sess_2.proj.registry.md", "sess_3.proj.registry.md", "sess_4.proj.registry.md"]
+
+
+def test_prune_applied_noop_when_under_limit(tmp_path: Path):
+    from memento_tattoo.registry import prune_applied
+    applied = tmp_path / "applied"
+    applied.mkdir()
+    (applied / "sess_a.proj.registry.md").write_text("x", encoding="utf-8")
+    assert prune_applied(applied, keep=100) == 0
+
+
+def test_prune_applied_missing_dir_is_safe(tmp_path: Path):
+    from memento_tattoo.registry import prune_applied
+    assert prune_applied(tmp_path / "nope", keep=10) == 0
