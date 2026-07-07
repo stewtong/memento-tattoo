@@ -57,6 +57,8 @@ review_after: 2026-12-31
 
 Old markers without `agent=` or `ts=` still load. New writes include agent identity so several local sessions can leave provenance without changing the stable note id.
 
+For how to write a note that stays retrievable (situation as a recognizable symptom, rule before instance, load-bearing aliases), see [authoring-standards.md](authoring-standards.md).
+
 ## Project Memory
 
 Project memory is the middle layer: context local to a project or task area that should survive across sessions. In the public package this lives adjacent to the project as `memory.md`, not inside the Memento root.
@@ -102,6 +104,8 @@ If this had been loaded at the beginning of the session, would it have dramatica
 ```
 
 Promote only when the lesson is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule. Tattoo promotion still requires explicit user approval before running `tattoo-add`.
+
+For the full five-gate promotion standard, including merge-first and the provenance rule, see [authoring-standards.md](authoring-standards.md).
 
 ## Tattoo Audit
 

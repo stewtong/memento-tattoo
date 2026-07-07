@@ -16,7 +16,7 @@ Use this template to add a lightweight correction-retention loop to a repo. Adju
 1. Read this instruction file.
 2. Load `memento/tattoos.md` at startup when it exists.
 3. Read `memory.md` when the task is about this project.
-4. Do not automatically load all of `memento/notes.md`; search it first with `memento-tattoo load`, grep, or another local retrieval step.
+4. Do not automatically load all of `memento/notes.md`; retrieve first. Prefer `memento-tattoo load`, which ranks matches and reads both `notes.md` and the rotated `notes_archive.md`. If you grep instead, search the whole `memento/` directory, not just `notes.md`: older lessons rotate out to `notes_archive.md`, so grepping only the hot file silently misses them.
 5. Load only the matching lessons that could change the next action.
 
 ## Correction handling
@@ -121,6 +121,8 @@ Propose a tattoo only when the answer is yes and the lesson is:
 Keep tattoos scarce. If everything is promoted, nothing is visible.
 
 Do not write a tattoo until the user explicitly approves the proposed wording. First surface the candidate and the reason it passes the bar.
+
+For the full gate (five tattoo checks, four note checks, per-field rules, and the merge-first caveat that a genuine sibling shares the action and not just the theme), see the authoring-standards doc in the memento-tattoo package.
 
 ## When to update project memory
 
