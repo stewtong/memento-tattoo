@@ -72,8 +72,7 @@ def test_save_commit_passes_retention_judgment(tmp_path: Path):
     spec = _spec()
     spec.pop("tattoo")
     spec["retention"] = {
-        "decision": "existing-repaired",
-        "repair": "added completion aliases",
+        "decision": "existing-missed",
         "covered_note_id": "sess_old.note.11111111",
     }
 
@@ -81,9 +80,9 @@ def test_save_commit_passes_retention_judgment(tmp_path: Path):
     events = read_retention_events(root=tmp_path)
 
     assert result.ok, result.error
-    assert events[0]["decision"] == "existing-repaired"
-    assert events[0]["repair"] == "added completion aliases"
-    assert events[0]["covered_note_id"] == "sess_old.note.11111111"
+    assert events[0]["decision"] == "existing-missed"
+    assert events[0]["cover_note_id"] == "sess_old.note.11111111"
+    assert "repair" not in events[0]
 
 
 def test_save_commit_project_edit_append_mode_preserves_existing_section(tmp_path: Path):
@@ -144,7 +143,7 @@ def test_save_commit_rejects_retention_for_seed_note(tmp_path: Path):
     result = save_commit(spec, root=tmp_path)
 
     assert not result.ok
-    assert result.error == "retention requires correction or reflection note"
+    assert result.error == "retention requires correction, reflection, or pattern note"
     assert not (tmp_path / "sessions").exists()
 
 

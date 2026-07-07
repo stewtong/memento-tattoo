@@ -45,6 +45,7 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert (export_root / "src/memento_tattoo/rebuild.py").exists()
     assert (export_root / "src/memento_tattoo/save_commit.py").exists()
     assert (export_root / "src/memento_tattoo/tattoo_audit.py").exists()
+    assert (export_root / "src/memento_tattoo/tattoo_firing.py").exists()
     assert (export_root / "tests/test_agent.py").exists()
     assert (export_root / "tests/test_new_id.py").exists()
     assert (export_root / "tests/test_session_store.py").exists()
@@ -52,6 +53,7 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert (export_root / "tests/test_rebuild.py").exists()
     assert (export_root / "tests/test_save_commit.py").exists()
     assert (export_root / "tests/test_concurrent_saves.py").exists()
+    assert (export_root / "tests/test_tattoo_firing.py").exists()
     assert "memory.md" not in copied
     assert not (export_root / "memory.md").exists()
     assert not (export_root / "memento-tattoo-README-draft.md").exists()

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.2.3 - 2026-07-07
+
+- Tightens retention logging to the two decisions the writer produces, while keeping legacy repeat events readable.
+- Adds cluster-cover detection for flat, high-scoring same-tag note families and records the covering note id on new retention events.
+- Adds Situation-line altitude hints for label-shaped notes, tattoo firing counters for cited tattoo ids, and tattoo-audit usage annotations.
+- Adds retention event author provenance and the `pattern` note kind, which writes live notes without diluting correction metrics.
+- Adds doctor checks for low repeat-correction rate at volume and optional recall probes.
+
 ## 0.2.2 - 2026-07-07
 
 - Adds `docs/authoring-standards.md`: a gated standard for how to write a tattoo (five checks) and a note (four checks plus per-field rules), with the merge-first caveat that a genuine sibling shares the action and not just the theme. Linked from `docs/concepts.md`.

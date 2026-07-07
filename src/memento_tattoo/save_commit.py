@@ -18,6 +18,7 @@ _ALLOWED_KEYS = {
     "session",
     "note",
     "note_kind",
+    "author",
     "retention",
     "tattoo",
     "project_edit",
@@ -100,8 +101,8 @@ def save_commit(
                 root=paths.root,
                 kind=spec.get("note_kind", "reflection"),
                 agent=agent,
+                author=spec.get("author"),
                 decision=retention.get("decision"),
-                repair=retention.get("repair", ""),
                 covered_note_id=retention.get("covered_note_id"),
             )
             touched.append(paths.notes)
@@ -205,14 +206,14 @@ def _validate(spec: dict[str, Any]) -> str:
         if not spec.get("note"):
             return "retention requires note"
         if spec.get("note_kind", "reflection") == "seed":
-            return "retention requires correction or reflection note"
-        allowed_retention = {"decision", "repair", "covered_note_id"}
+            return "retention requires correction, reflection, or pattern note"
+        allowed_retention = {"decision", "covered_note_id"}
         unknown_retention = sorted(set(retention) - allowed_retention)
         if unknown_retention:
             return f"retention unknown keys: {', '.join(unknown_retention)}"
         decision = retention.get("decision")
         if decision and decision not in DECISIONS:
-            return "retention.decision must be new, existing-missed, existing-repaired, or false-positive"
+            return "retention.decision must be new or existing-missed"
     return ""
 
 

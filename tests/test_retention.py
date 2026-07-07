@@ -110,23 +110,23 @@ def test_note_add_can_record_agent_retention_judgment(tmp_path: Path):
         sess="sess_judge",
         root=tmp_path,
         kind="correction",
-        decision="existing-repaired",
-        repair="added verification and complete aliases",
+        decision="existing-missed",
         covered_note_id="sess_old.note.11111111",
     )
 
     events = read_retention_events(root=tmp_path)
 
     assert applied is True
-    assert events[0]["decision"] == "existing-repaired"
-    assert events[0]["repair"] == "added verification and complete aliases"
-    assert events[0]["covered_note_id"] == "sess_old.note.11111111"
-    assert events[0]["decided_by"] == "agent"
+    assert events[0]["decision"] == "existing-missed"
+    assert events[0]["cover_note_id"] == "sess_old.note.11111111"
+    assert "repair" not in events[0]
+    assert "review_needed" not in events[0]
+    assert "decided_by" not in events[0]
     assert recurrence_counts(root=tmp_path) == {"sess_old.note.11111111": 1}
 
 
 def test_seed_note_rejects_retention_judgment(tmp_path: Path):
-    with pytest.raises(ValueError, match="retention judgment requires correction or reflection"):
+    with pytest.raises(ValueError, match="retention judgment requires correction, reflection, or pattern"):
         note_add(
             "Situation: import\nNote: seed data",
             sess="sess_seed",
@@ -134,3 +134,40 @@ def test_seed_note_rejects_retention_judgment(tmp_path: Path):
             kind="seed",
             decision="new",
         )
+
+
+def test_classify_cluster_cover_uses_shared_tags_when_flat_high(tmp_path: Path):
+    (tmp_path / "notes.md").write_text(
+        "<!-- delta:sess_a.note.aaaaaaaa -->\n"
+        "Situation: save work forgets to print the driver stdout block\n"
+        "Note: print the save-commit stdout verbatim.\n"
+        "tags: save-work, verification\n\n"
+        "<!-- delta:sess_b.note.bbbbbbbb -->\n"
+        "Situation: save work output replaces the driver summary by hand\n"
+        "Note: never hand-compose the save summary.\n"
+        "tags: save-work, release\n\n"
+        "<!-- delta:sess_c.note.cccccccc -->\n"
+        "Situation: work output summary has many generic words\n"
+        "Note: unrelated high-overlap neighbor.\n"
+        "tags: unrelated\n",
+        encoding="utf-8",
+    )
+
+    result = classify(
+        "save work output summary misses driver stdout replaces hand compose release verification",
+        root=tmp_path,
+        min_score=60,
+    )
+
+    assert result["has_cover"] is True
+    assert result["suggested_decision"] == "existing-missed"
+    assert result["cover_note_id"] == "sess_b.note.bbbbbbbb"
+
+
+def test_recurrence_counts_tolerates_legacy_existing_repaired_and_cover_field(tmp_path: Path):
+    append_retention_event(
+        {"decision": "existing-repaired", "note_id": "sess_new.note.11111111", "cover_note_id": "sess_old.note.22222222"},
+        root=tmp_path,
+    )
+
+    assert recurrence_counts(root=tmp_path) == {"sess_old.note.22222222": 1}

@@ -22,10 +22,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     note = subparsers.add_parser("note-add", help="append a checked lesson note")
     note.add_argument("--sess", required=True)
-    note.add_argument("--kind", choices=["correction", "reflection", "seed"], default="reflection")
+    note.add_argument("--kind", choices=["correction", "reflection", "seed", "pattern"], default="reflection")
+    note.add_argument("--author", default=None, help="author code for retention events, such as cc, cdx, or oc")
     note.add_argument("--decision", choices=DECISIONS, default=None, help="override the checked retrieval decision")
-    note.add_argument("--repair", default="", help="short description of the repair or judgment")
-    note.add_argument("--covered-note-id", default=None, help="existing lesson note id this note repaired or should have matched")
+    note.add_argument("--covered-note-id", default=None, help="existing lesson note id this note should have matched")
     note.add_argument("text")
 
     tattoo = subparsers.add_parser("tattoo-add", help="append a promoted lesson")
@@ -90,8 +90,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     root = Path(args.root).resolve() if args.root else Path.cwd() / "memento"
 
     if args.command == "note-add":
-        if args.kind == "seed" and (args.decision is not None or args.repair or args.covered_note_id is not None):
-            print("error: retention overrides require correction or reflection notes")
+        if args.kind == "seed" and (args.decision is not None or args.covered_note_id is not None):
+            print("error: retention overrides require correction, reflection, or pattern notes")
             return 2
         applied, marker = note_add(
             args.text,
@@ -99,8 +99,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             root=root,
             kind=args.kind,
             agent=args.agent,
+            author=args.author,
             decision=args.decision,
-            repair=args.repair,
             covered_note_id=args.covered_note_id,
         )
         print(f"{'applied' if applied else 'skipped (already applied)'} {marker}")

@@ -8,7 +8,9 @@ from .config import paths_for
 from .lock import memory_lock
 
 
-DECISIONS = ("new", "existing-missed", "existing-repaired", "false-positive")
+# Write vocabulary. Read-side helpers below still tolerate legacy events carrying
+# existing-repaired or false-positive.
+DECISIONS = ("new", "existing-missed")
 _REPEAT_DECISIONS = ("existing-missed", "existing-repaired")
 DEFAULT_MIN_SCORE = 60
 # A true same-lesson cover stands out above its vocabulary neighbors; a flat tie
@@ -23,6 +25,7 @@ DOMINANCE_RATIO = 1.5
 # (well above the 60 floor and a small flat tie) so a borderline overlap still logs
 # 'new' by default rather than reintroducing a false positive.
 STRONG_COVER_SCORE = 120
+CLUSTER_MEMBER_MIN = 85
 
 
 def _append_line(path: Path, line: str) -> None:
@@ -57,7 +60,7 @@ def recurrence_counts(*, root: Path) -> dict[str, int]:
     counts: dict[str, int] = {}
     for event in read_retention_events(root=root):
         if event.get("decision") in _REPEAT_DECISIONS:
-            note_id = event.get("covered_note_id") or event.get("note_id")
+            note_id = event.get("cover_note_id") or event.get("covered_note_id") or event.get("note_id")
             if note_id:
                 counts[note_id] = counts.get(note_id, 0) + 1
     return counts
@@ -94,9 +97,26 @@ def classify(
     second = candidates[1]["score"] if len(candidates) > 1 else 0
     dominant = bool(candidates) and (len(candidates) == 1 or top >= DOMINANCE_RATIO * second)
     strong = top >= STRONG_COVER_SCORE
-    has_cover = bool(candidates) and top >= min_score and (dominant or strong)
+
+    cluster_head = ""
+    if len(candidates) > 1:
+        high = [item for item in ranked if item.score >= CLUSTER_MEMBER_MIN]
+        tag_sets = [{tag.strip().lower() for tag in item.note.tags if tag.strip()} for item in high]
+        for index, item in enumerate(high):
+            if not tag_sets[index]:
+                continue
+            if any(other != index and tag_sets[index] & tag_sets[other] for other in range(len(high))):
+                cluster_head = item.note.note_id
+                break
+    clustered = bool(cluster_head)
+
+    has_cover = bool(candidates) and top >= min_score and (dominant or strong or clustered)
+    cover_note_id = ""
+    if has_cover:
+        cover_note_id = candidates[0]["note_id"] if (dominant or strong) else cluster_head
     return {
         "candidates": candidates,
         "has_cover": has_cover,
         "suggested_decision": "existing-missed" if has_cover else "new",
+        "cover_note_id": cover_note_id,
     }

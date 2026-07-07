@@ -27,9 +27,7 @@ def test_cli_note_add_accepts_retention_judgment(tmp_path: Path, capsys):
             "--kind",
             "correction",
             "--decision",
-            "false-positive",
-            "--repair",
-            "ranking matched generic words only",
+            "existing-missed",
             "--covered-note-id",
             "sess_old.note.11111111",
             "Situation: publish prep\nNote: do not count unrelated retrieval as coverage",
@@ -40,9 +38,9 @@ def test_cli_note_add_accepts_retention_judgment(tmp_path: Path, capsys):
 
     assert code == 0
     assert "applied" in capsys.readouterr().out
-    assert events[0]["decision"] == "false-positive"
-    assert events[0]["repair"] == "ranking matched generic words only"
-    assert events[0]["covered_note_id"] == "sess_old.note.11111111"
+    assert events[0]["decision"] == "existing-missed"
+    assert events[0]["cover_note_id"] == "sess_old.note.11111111"
+    assert "repair" not in events[0]
 
 
 def test_cli_note_add_rejects_seed_retention_judgment(tmp_path: Path, capsys):
@@ -62,7 +60,7 @@ def test_cli_note_add_rejects_seed_retention_judgment(tmp_path: Path, capsys):
     )
 
     assert code == 2
-    assert "retention overrides require correction or reflection notes" in capsys.readouterr().out
+    assert "retention overrides require correction, reflection, or pattern notes" in capsys.readouterr().out
     assert not (tmp_path / "retention_log.jsonl").exists()
 
 

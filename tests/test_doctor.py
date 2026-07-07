@@ -201,3 +201,37 @@ def test_doctor_no_tattoo_lifecycle_warn_when_tattoos_md_absent(tmp_path: Path):
     ok, output = run_doctor(tmp_path)
 
     assert "tattoo-lifecycle" not in output
+
+
+def test_doctor_warns_when_repeat_rate_is_low_at_volume(tmp_path: Path):
+    (tmp_path / "notes.md").write_text("Situation: x\nNote: y\n", encoding="utf-8")
+    (tmp_path / "tattoos.md").write_text("# Tattoos\n", encoding="utf-8")
+    for index in range(50):
+        append_retention_event({"decision": "new", "note_id": f"sess_{index}.note.11111111"}, root=tmp_path)
+
+    ok, output = run_doctor(tmp_path)
+
+    assert ok is True
+    assert "repeat-correction rate 0.00" in output
+    assert "under 0.05 at volume" in output
+
+
+def test_doctor_recall_probe_miss_fails(tmp_path: Path):
+    (tmp_path / "notes.md").write_text(
+        "<!-- delta:sess_a.note.aaaaaaaa -->\n"
+        "Situation: proofreading public prose\n"
+        "Note: scan for banned punctuation\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tattoos.md").write_text("# Tattoos\n", encoding="utf-8")
+    append_retention_event({"decision": "new", "note_id": "sess_a.note.aaaaaaaa"}, root=tmp_path)
+    (tmp_path / ".recall_probes.json").write_text(
+        '[{"query": "GPU quota planning", "expect": "sess_a.note.aaaaaaaa", "top": 1}]\n',
+        encoding="utf-8",
+    )
+
+    ok, output = run_doctor(tmp_path)
+
+    assert ok is False
+    assert "recall-probes" in output
+    assert "not in top-1" in output

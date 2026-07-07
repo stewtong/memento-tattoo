@@ -52,7 +52,8 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
         except Exception as exc:
             checks.append(("fail", "retention", f"retention_log.jsonl unreadable: {exc}"))
         else:
-            checks.append(("pass", "retention", f"retention events: {len(events)}"))
+            checks.append(("pass", "retention", _retention_detail(paths.root, events)))
+            checks.append(_check_recall_probes(paths.root))
 
     if not paths.sessions.exists():
         checks.append(("warn", "sessions", "sessions dir missing"))
@@ -99,6 +100,47 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
     lines = ["MEMENTO_TATTOO_DOCTOR"]
     lines.extend(f"{status.upper():5} {name}: {detail}" for status, name, detail in checks)
     return ok, "\n".join(lines)
+
+
+RETENTION_RATE_MIN_EVENTS = 50
+RETENTION_RATE_FLOOR = 0.05
+
+
+def _retention_detail(root: Path, events: list[dict]) -> str:
+    from .retention import recurrence_counts, repeat_correction_rate
+
+    rate = repeat_correction_rate(root=root)
+    counts = recurrence_counts(root=root)
+    top = sorted(counts.items(), key=lambda item: -item[1])[:3]
+    top_str = ", ".join(f"{note_id}:{count}" for note_id, count in top) if top else "none"
+    detail = f"retention events: {len(events)}; repeat-correction rate {rate:.2f}; top recurring: {top_str}"
+    if len(events) >= RETENTION_RATE_MIN_EVENTS and rate < RETENTION_RATE_FLOOR:
+        detail += f"; repeat-correction rate under {RETENTION_RATE_FLOOR} at volume"
+    return detail
+
+
+def _check_recall_probes(root: Path) -> tuple[str, str, str]:
+    import json
+
+    from .recall import rank_memento_notes
+
+    path = paths_for(root).root / ".recall_probes.json"
+    if not path.exists():
+        return ("warn", "recall-probes", "no recall probes configured")
+    try:
+        probes = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return ("fail", "recall-probes", f"probes file unreadable: {exc}")
+    misses: list[str] = []
+    for probe in probes:
+        top = int(probe.get("top", 3))
+        ranked = rank_memento_notes(probe["query"], root=root, limit=top)
+        ids = [item.note.note_id for item in ranked]
+        if probe["expect"] not in ids:
+            misses.append(f"{probe['expect']} not in top-{top} for '{probe['query'][:48]}'")
+    if misses:
+        return ("fail", "recall-probes", "; ".join(misses))
+    return ("pass", "recall-probes", f"{len(probes)}/{len(probes)} probes hit")
 
 
 def _expired_reservations(path: Path) -> list[str]:

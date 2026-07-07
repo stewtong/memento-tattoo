@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 import hashlib
 import os
+import re
+import sys
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -100,6 +102,39 @@ def _first_situation_line(text: str) -> str:
     return stripped[0] if stripped else ""
 
 
+_SITUATION_SIGNAL_RE = re.compile(
+    r"(?i)"
+    r"\b(when|after|before|once|while|if|unless)\b"
+    r"|\b(fails?|failed|failing|breaks?|broke|breaking|returns?|returned|returning"
+    r"|hangs?|hung|hanging|drops?|dropped|dropping|crash(es|ed|ing)?|errors?|errored"
+    r"|throws?|thrown|throwing|miss(es|ed|ing)?|lies|lied|clobbers?|clobbered|clobbering"
+    r"|races?|raced|racing|regress(es|ed|ing)?|silently|stale|empty|wrong|no results)\b"
+    r"|['\"][^'\"]{3,}['\"]"
+)
+_LABEL_SHAPE_RE = re.compile(
+    r"(?i)"
+    r"(\bphase\s*\d)"
+    r"|(\bv\d+\b.*\b(implementation|build|rollout|migration|integration|setup|refactor)\b)"
+    r"|(\b(implementation|rollout|integration)\s*$)"
+)
+
+
+def note_situation_altitude_hint(text: str, *, root: Optional[Path] = None) -> str | None:
+    """Return a non-blocking routing hint for label-shaped Situation lines."""
+    situation = _first_situation_line(text)
+    if not situation:
+        return None
+    if _SITUATION_SIGNAL_RE.search(situation):
+        return None
+    if not _LABEL_SHAPE_RE.search(situation):
+        return None
+    return (
+        "situation looks like a project/phase label, not a recurring situation. if this is "
+        "project status it belongs in the project's memory.md (routing test); if it's a "
+        "real lesson, restate the Situation as its trigger (when X / X fails with Y)."
+    )
+
+
 def _note_id_from_marker(marker: str) -> str:
     parsed = parse_delta_marker(marker)
     if parsed is not None:
@@ -114,17 +149,17 @@ def note_add(
     root: Path,
     kind: str = "reflection",
     agent: Optional[str] = None,
+    author: Optional[str] = None,
     decision: Optional[str] = None,
-    repair: str = "",
     covered_note_id: Optional[str] = None,
 ) -> Tuple[bool, str]:
     paths = paths_for(root)
     agent_id = resolve_agent(agent)
-    has_retention_judgment = decision is not None or bool(repair) or covered_note_id is not None
+    has_retention_judgment = decision is not None or covered_note_id is not None
 
     if kind == "seed":
         if has_retention_judgment:
-            raise ValueError("retention judgment requires correction or reflection note")
+            raise ValueError("retention judgment requires correction, reflection, or pattern note")
         with memory_lock(paths.root):
             applied, marker = _append_eof(paths.notes, sess, "note", text, agent=agent_id)
             rotate_hot_notes(paths.notes, paths.notes_archive)  # keep the hot file bounded
@@ -139,24 +174,33 @@ def note_add(
     situation = _first_situation_line(text)
     result = classify(situation, root=paths.root)
     final_decision = decision or result["suggested_decision"]
+    if result["has_cover"]:
+        print(
+            f"possible cover: {result['cover_note_id']} "
+            "(extend or supersede it instead of appending a near-duplicate)",
+            file=sys.stderr,
+        )
+    if alt_hint := note_situation_altitude_hint(text, root=paths.root):
+        print(alt_hint, file=sys.stderr)
     with memory_lock(paths.root):
         applied, marker = _append_eof(paths.notes, sess, "note", text, agent=agent_id)
-        if applied:
+        if applied and kind in ("correction", "reflection"):
             event = {
                 "ts": now_iso(),
                 "sess": sess,
                 "kind": kind,
+                "author": author,
                 "situation": situation,
                 "note_id": _note_id_from_marker(marker),
                 "candidates": result["candidates"],
                 "decision": final_decision,
-                "repair": repair,
-                "decided_by": "agent",
-                "review_needed": decision is None,
+                "cover_note_id": covered_note_id or result["cover_note_id"],
             }
-            if covered_note_id:
-                event["covered_note_id"] = covered_note_id
             append_retention_event(event, root=paths.root, assume_locked=True)
+        if applied:
+            from .tattoo_firing import bump_tattoo_firing
+
+            bump_tattoo_firing(text, root=paths.root, now=now_iso(), assume_locked=True)
         rotate_hot_notes(paths.notes, paths.notes_archive)  # keep the hot file bounded (every writer)
     return applied, marker
 
