@@ -14,7 +14,7 @@ examples/basic/
     retention_log.jsonl
 ```
 
-`project/memory.md` holds project-local state. `memento/notes.md` holds provisional lessons. `memento/tattoos.md` holds scarce promoted lessons. `memento/retention_log.jsonl` records whether retrieval worked when a correction or reflection was added.
+`project/memory.md` holds project-local state. `memento/notes.md` holds provisional lessons. `memento/tattoos.md` holds scarce promoted lessons. `memento/retention_log.jsonl` records the cover-detection decision at a correction or reflection write-time checkpoint.
 
 ## The loop
 
@@ -28,7 +28,7 @@ Note: check whether an existing verification lesson should have fired before add
 aliases: correction, verification, duplicate, retention, complete
 ```
 
-4. The retention log records the decision as `existing-repaired`, which means a relevant lesson existed and was improved rather than treated as brand new.
+4. The retention log records the decision as `existing-missed`, which means a relevant lesson existed but did not prevent the correction.
 5. If the user approves the wording, the broader operating rule is promoted to a tattoo:
 
 ```markdown

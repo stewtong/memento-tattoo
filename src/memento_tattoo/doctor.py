@@ -107,15 +107,19 @@ RETENTION_RATE_FLOOR = 0.05
 
 
 def _retention_detail(root: Path, events: list[dict]) -> str:
-    from .retention import recurrence_counts, repeat_correction_rate
+    from .retention import recurrence_counts, retention_health_rate
 
-    rate = repeat_correction_rate(root=root)
+    rate = retention_health_rate(root=root)
     counts = recurrence_counts(root=root)
     top = sorted(counts.items(), key=lambda item: -item[1])[:3]
     top_str = ", ".join(f"{note_id}:{count}" for note_id, count in top) if top else "none"
-    detail = f"retention events: {len(events)}; repeat-correction rate {rate:.2f}; top recurring: {top_str}"
+    detail = (
+        f"retention events: {len(events)}; retention health {rate:.2f} "
+        f"(existing-missed / (new + existing-missed); note-write signal, not prevention/application); "
+        f"top recurring: {top_str}"
+    )
     if len(events) >= RETENTION_RATE_MIN_EVENTS and rate < RETENTION_RATE_FLOOR:
-        detail += f"; repeat-correction rate under {RETENTION_RATE_FLOOR} at volume"
+        detail += f"; retention health under {RETENTION_RATE_FLOOR} at volume"
     return detail
 
 

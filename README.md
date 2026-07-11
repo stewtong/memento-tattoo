@@ -22,15 +22,25 @@ Generic memory stores context. `memento-tattoo` stores corrections that should a
 
 Most agent memory systems start by asking how much context can be recalled. `memento-tattoo` asks a narrower question: what correction would change the agent's next action?
 
-That makes memory a lightweight continuous-learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and a retention log checks whether the right lesson showed up when it mattered.
+That makes memory a lightweight learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and a retention log checks whether a covering lesson was detected at the write-time checkpoint.
 
 ## What you get
 
-- **Checked retrieval with a retention log.** Every recall records whether the right lesson surfaced when it mattered, so you get recall of lessons, not just recall of events. This loop is the core differentiator.
+- **A promotion gate with a lifecycle.** Corrections become rules, rules can become scarce tattoos, and `tattoo-audit` flags promoted lessons for keep, demote, or cut review.
 - **Situation-recognition recall.** Lessons are ranked for the current task, so a correction resurfaces the moment the situation has a name again.
-- **Scarce promotion with a lifecycle.** Tattoos stay rare, and `tattoo-audit` flags promoted lessons due for a keep, demote, or cut review so the set does not grow without bound.
+- **Checked retrieval with a retention log.** When a correction or reflection is written, the system records whether a covering lesson was detected at that write-time checkpoint. This loop is the core differentiator.
 - **Plain-text memory you can inspect, repair, and delete.** Notes, project memory, and tattoos are Markdown files. No database, no service dependency.
 - **Optional local coordination for parallel agents.** Advisory locks, reserved session IDs, and a queued registry drain for concurrent local sessions.
+
+## What the retention signal proves
+
+The operational retention-health signal is the share of shipped note-write decisions recorded as `existing-missed`. Re-run the deterministic baseline with `.venv/bin/python scripts/retention_eval.py`:
+
+```text
+existing-missed / (new + existing-missed)
+```
+
+It measures note-write classification hygiene. It does not measure behavioral repeat reduction, retrieval exposure, whether an agent applied a lesson, or recurrence against opportunities; the event log has no events or denominators for those claims. The deterministic cover-detection evaluation reports a baseline of 3/3 true covers flagged (1.00 coverage) and 0/3 negative queries flagged (0.00 false-positive rate). Those figures measure cover detection, not behavioral repeat reduction.
 
 ## Install from a checkout
 
@@ -136,7 +146,7 @@ The basic example shows the loop this project is designed for:
 
 1. An agent claims a code change is complete without running the proof command.
 2. The user correction is captured as a note in [examples/basic/memento/notes.md](examples/basic/memento/notes.md).
-3. The retention log records that an existing verification lesson was repaired in [examples/basic/memento/retention_log.jsonl](examples/basic/memento/retention_log.jsonl).
+3. The retention log records that an existing verification lesson was missed in [examples/basic/memento/retention_log.jsonl](examples/basic/memento/retention_log.jsonl).
 4. If the user approves the broader completion rule, it is promoted to [examples/basic/memento/tattoos.md](examples/basic/memento/tattoos.md).
 5. A later task can load the tattoo before claiming completion.
 

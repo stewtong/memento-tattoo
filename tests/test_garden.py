@@ -21,3 +21,5 @@ def test_garden_digest_lists_stale_and_promotion_candidates(tmp_path: Path):
     assert "sess_a.note.11111111" in digest
     assert "Promotion candidates" in digest
     assert "recurred 2x" in digest
+    assert "Retention health: 1.00" in digest
+    assert "not prevention/application" in digest

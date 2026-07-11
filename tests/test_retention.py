@@ -6,6 +6,7 @@ from memento_tattoo.retention import (
     classify,
     read_retention_events,
     recurrence_counts,
+    retention_health_rate,
     repeat_correction_rate,
 )
 from memento_tattoo.write_through import note_add
@@ -20,6 +21,15 @@ def test_append_and_read_retention_events(tmp_path: Path):
     assert [event["decision"] for event in events] == ["new", "existing-missed"]
     assert recurrence_counts(root=tmp_path) == {"sess_a.note.11111111": 1}
     assert repeat_correction_rate(root=tmp_path) == 0.5
+
+
+def test_retention_health_rate_uses_shipped_decisions_and_legacy_alias(tmp_path: Path):
+    append_retention_event({"decision": "new", "note_id": "sess_a.note.11111111"}, root=tmp_path)
+    append_retention_event({"decision": "existing-missed", "note_id": "sess_b.note.22222222"}, root=tmp_path)
+    append_retention_event({"decision": "existing-repaired", "note_id": "sess_c.note.33333333"}, root=tmp_path)
+
+    assert retention_health_rate(root=tmp_path) == 0.5
+    assert repeat_correction_rate(root=tmp_path) == retention_health_rate(root=tmp_path)
 
 
 def test_classify_new_when_no_dominant_candidate(tmp_path: Path):

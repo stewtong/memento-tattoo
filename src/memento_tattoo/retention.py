@@ -12,6 +12,7 @@ from .lock import memory_lock
 # existing-repaired or false-positive.
 DECISIONS = ("new", "existing-missed")
 _REPEAT_DECISIONS = ("existing-missed", "existing-repaired")
+_HEALTH_DECISIONS = ("new", "existing-missed")
 DEFAULT_MIN_SCORE = 60
 # A true same-lesson cover stands out above its vocabulary neighbors; a flat tie
 # (several unrelated notes scoring alike on generic-word overlap) is NOT a cover.
@@ -66,17 +67,29 @@ def recurrence_counts(*, root: Path) -> dict[str, int]:
     return counts
 
 
-def repeat_correction_rate(*, root: Path) -> float:
-    counted = {"new", *_REPEAT_DECISIONS}
+def retention_health_rate(*, root: Path) -> float:
+    """Return the share of shipped retention events recorded as existing-missed.
+
+    This is a note-write classification signal, not a measure of prevention,
+    retrieval exposure, application, or recurrence against opportunities.
+    Legacy ``existing-repaired`` events remain readable but are excluded from
+    the shipped two-decision denominator.
+    """
+    counted = set(_HEALTH_DECISIONS)
     total = 0
     repeats = 0
     for event in read_retention_events(root=root):
         decision = event.get("decision")
         if decision in counted:
             total += 1
-            if decision in _REPEAT_DECISIONS:
+            if decision == "existing-missed":
                 repeats += 1
     return repeats / total if total else 0.0
+
+
+def repeat_correction_rate(*, root: Path) -> float:
+    """Compatibility alias for :func:`retention_health_rate`."""
+    return retention_health_rate(root=root)
 
 
 def classify(

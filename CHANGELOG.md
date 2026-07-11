@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-07-11
+
+- Adds a deterministic cover-detection evaluation with independently phrased positive and negative queries; the seeded baseline is 3/3 true covers flagged and 0/3 negative queries flagged.
+- Relabels the operational repeat metric as retention health, adds the `retention_health_rate` API with a compatibility alias, and makes doctor/garden output explicit about what the signal does not measure.
+- Aligns public retention documentation and examples with the shipped `new` / `existing-missed` write vocabulary while keeping legacy event values readable.
+- Tightens the README thesis around the promotion gate, situation-recognition recall, and checked retrieval.
+
 ## 0.2.3 - 2026-07-07
 
 - Tightens retention logging to the two decisions the writer produces, while keeping legacy repeat events readable.

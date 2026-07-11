@@ -17,7 +17,7 @@ Plain Markdown is enough to try the correction-retention pattern. Use the CLI wh
 Core loop:
 
 ```text
-memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] [--decision new|existing-missed|existing-repaired|false-positive] [--repair <text>] [--covered-note-id <note_id>] <text>
+memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] [--decision new|existing-missed] [--covered-note-id <note_id>] <text>
 memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
 memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] [--append|--replace] <text>
 memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
@@ -154,8 +154,7 @@ Retention judgment fields:
 ```json
 {
   "retention": {
-    "decision": "existing-repaired",
-    "repair": "added verification and complete aliases",
+    "decision": "existing-missed",
     "covered_note_id": "sess_old.note.11111111"
   }
 }
@@ -175,8 +174,7 @@ By default, `note-add` records the CLI's suggested decision. Agents can override
 memento-tattoo --root <path> note-add \
   --sess <sess_id> \
   --kind correction \
-  --decision existing-repaired \
-  --repair "added verification and complete aliases" \
+  --decision existing-missed \
   --covered-note-id sess_old.note.11111111 \
   "Situation: repeating an unverified completion claim
 Note: strengthened the completion-check lesson so future claims load the proof-command rule."
@@ -194,17 +192,15 @@ This keeps the CLI mechanical while letting the agent remain the judge.
 - situation
 - written note id
 - ranked candidates
-- suggested decision
+- final decision (`new` or `existing-missed`)
 - optional covered note id
-- optional repair note
-- review flag
 
-The core decisions are:
+The shipped decisions are:
 
 - `new`: no dominant existing lesson covered the situation.
 - `existing-missed`: a likely lesson existed but did not prevent the correction.
-- `existing-repaired`: a likely lesson existed and was repaired.
-- `false-positive`: retrieval suggested a cover that should not count.
+
+Older logs may contain `existing-repaired` or `false-positive`; readers tolerate those legacy values, but current writes do not produce them.
 
 ## Gardener Digest
 
@@ -215,12 +211,12 @@ The gardener is read-only. It lists:
 - promotion candidates based on recurrence count
 - a placeholder section for future merge suggestions
 
-## Repeat-Correction Rate
+## Retention Health
 
-Repeat-correction rate is:
+Retention health is:
 
 ```text
-(existing-missed + existing-repaired) / (new + existing-missed + existing-repaired)
+existing-missed / (new + existing-missed)
 ```
 
-It is a useful directional signal, not a benchmark. A high value can mean retrieval is weak, lesson triggers are too narrow, or the operator is repeatedly working in the same failure area. A low value can mean the system is learning new lessons, or it can mean old misses are not being checked carefully.
+It is a note-write classification signal, not a benchmark or a measure of prevention. The log does not contain retrieval-exposure, application/followed, or opportunity events, so application rate and recurrence-against-opportunities are not measured. The old `repeat_correction_rate` function name remains as a compatibility alias.

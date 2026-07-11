@@ -37,6 +37,8 @@ def test_doctor_passes_minimal_valid_root(tmp_path: Path):
 
     assert ok is True
     assert "retention events: 1" in output
+    assert "retention health 0.00" in output
+    assert "not prevention/application" in output
 
 
 def test_doctor_does_not_require_legacy_project_file_when_project_memory_is_checked(tmp_path: Path):
@@ -212,8 +214,8 @@ def test_doctor_warns_when_repeat_rate_is_low_at_volume(tmp_path: Path):
     ok, output = run_doctor(tmp_path)
 
     assert ok is True
-    assert "repeat-correction rate 0.00" in output
-    assert "under 0.05 at volume" in output
+    assert "retention health 0.00" in output
+    assert "retention health under 0.05 at volume" in output
 
 
 def test_doctor_recall_probe_miss_fails(tmp_path: Path):

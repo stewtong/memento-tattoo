@@ -3,13 +3,19 @@ from __future__ import annotations
 from pathlib import Path
 
 from .recall import load_memento_notes
-from .retention import recurrence_counts, read_retention_events, repeat_correction_rate
+from .retention import recurrence_counts, read_retention_events, retention_health_rate
 
 
 def build_digest(*, root: Path, today: str, promote_threshold: int = 2) -> str:
     today = today[:10]
     notes = load_memento_notes(root)
-    lines = ["# Memento gardening digest", "", f"Repeat-correction rate: {repeat_correction_rate(root=root):.2f}", ""]
+    lines = [
+        "# Memento gardening digest",
+        "",
+        f"Retention health: {retention_health_rate(root=root):.2f} "
+        "(existing-missed / (new + existing-missed); note-write signal, not prevention/application)",
+        "",
+    ]
 
     def section(title: str, items: list[str]) -> None:
         lines.append(f"## {title}")
