@@ -33,6 +33,8 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
         "concepts.md",
         "essay.md",
         "authoring-standards.md",
+        "memento-tattoo-demo.html",
+        "memento-memory-hero-v2.png",
     }
     assert {path.name for path in (export_root / "templates").iterdir()} == {
         "AGENTS.md",

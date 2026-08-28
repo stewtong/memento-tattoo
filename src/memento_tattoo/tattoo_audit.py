@@ -19,7 +19,7 @@ from typing import Optional
 from .agent import parse_delta_marker
 from .config import PathLike, paths_for
 from .session_store import load_sessions
-from .tattoo_firing import firings_for_session, tattoo_firing_counts
+from .tattoo_firing import effective_tattoo_firing_counts, firings_for_session
 
 DEFAULT_WINDOW_DAYS = 30
 
@@ -149,7 +149,7 @@ def tattoo_audit_report(
     window_days: int = DEFAULT_WINDOW_DAYS,
 ) -> str:
     candidates = audit_tattoos(root, window_days=window_days)
-    counts = tattoo_firing_counts(root)
+    counts = effective_tattoo_firing_counts(root)
     flagged = [c for c in candidates if c.flagged]
     past = [c for c in flagged if c.age_days is not None and c.age_days > window_days]
     unknown = [c for c in flagged if not (c.age_days is not None and c.age_days > window_days)]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,6 +123,54 @@ def prune_applied(applied_dir: Path, keep: int = APPLIED_KEEP) -> int:
     return removed
 
 
+CONFLICT_HOT_DAYS = 30
+CONFLICT_HOT_MAX = 200
+
+
+def conflict_archive_candidates(
+    root: Path,
+    *,
+    days: int = CONFLICT_HOT_DAYS,
+    max_hot: int = CONFLICT_HOT_MAX,
+) -> list[Path]:
+    conflict_dir = paths_for(root).queue / "conflicts"
+    files = sorted(
+        (path for path in conflict_dir.glob("*.registry.md") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime, path.name),
+    )
+    cutoff = time.time() - days * 86400
+    by_age = {path for path in files if path.stat().st_mtime < cutoff}
+    excess = set(files[: max(0, len(files) - max_hot)]) if max_hot > 0 else set(files)
+    return sorted(by_age | excess, key=lambda path: (path.stat().st_mtime, path.name))
+
+
+def archive_registry_conflicts(
+    root: Path,
+    *,
+    days: int = CONFLICT_HOT_DAYS,
+    max_hot: int = CONFLICT_HOT_MAX,
+    assume_locked: bool = False,
+) -> int:
+    paths = paths_for(root)
+
+    def _do() -> int:
+        candidates = conflict_archive_candidates(paths.root, days=days, max_hot=max_hot)
+        archive = paths.queue / "conflicts/archive"
+        for source in candidates:
+            destination = archive / source.name
+            if destination.exists():
+                raise FileExistsError(destination)
+        archive.mkdir(parents=True, exist_ok=True)
+        for source in candidates:
+            os.replace(source, archive / source.name)
+        return len(candidates)
+
+    if assume_locked:
+        return _do()
+    with memory_lock(paths.root):
+        return _do()
+
+
 def drain(root: Path, timeout: float = 10.0) -> DrainResult:
     paths = paths_for(root)
     generated = build_generated_files(paths.root)
@@ -140,8 +189,14 @@ def drain(root: Path, timeout: float = 10.0) -> DrainResult:
                         deltas.append(_parse_delta(path))
                     except ValueError as exc:
                         errors.append(str(exc))
+                if errors:
+                    break
+                try:
+                    entries = _parse_registry(paths.registry)
+                except ValueError as exc:
+                    errors.append(str(exc))
+                    break
                 winners, losers = _choose_winners(deltas)
-                entries = _parse_registry(paths.registry)
                 for delta in winners:
                     entries[delta.slug] = _entry_from_delta(delta, losers_by_slug=losers)
                     applied += 1
@@ -153,7 +208,9 @@ def drain(root: Path, timeout: float = 10.0) -> DrainResult:
                 for loser in [delta for group in losers.values() for delta in group]:
                     _move_delta(loser.path, paths.queue / "conflicts")
                     conflicts += 1
-            prune_applied(paths.queue / "applied")  # bound the provenance audit trail
+            if not errors:
+                prune_applied(paths.queue / "applied")  # bound the provenance audit trail
+                archive_registry_conflicts(paths.root, assume_locked=True)
     except LockTimeout:
         return DrainResult(skipped=True)
     return DrainResult(applied=applied, conflicts=conflicts, errors=tuple(errors))
@@ -180,6 +237,10 @@ def _parse_delta(path: Path) -> RegistryDelta:
         raise ValueError(f"unreadable registry delta header: {path}")
     attrs = _parse_attrs(match.group("attrs"))
     line = text[match.end() :].strip()
+    missing = [key for key in ("sess", "action", "slug", "agent", "ts") if not attrs.get(key)]
+    if missing or attrs.get("action") not in _ACTIONS or not line:
+        detail = ", ".join(missing) if missing else "invalid action or empty line"
+        raise ValueError(f"invalid registry delta {path}: {detail}")
     return RegistryDelta(
         path=path,
         sess=attrs.get("sess", ""),
@@ -195,6 +256,8 @@ def _parse_registry(path: Path) -> dict[str, RegistryEntry]:
     if not path.exists():
         return {}
     text = path.read_text(encoding="utf-8")
+    if "<!-- registry-entry" in text and not _ENTRY_RE.search(text):
+        raise ValueError(f"unreadable registry entry: {path}")
     entries: dict[str, RegistryEntry] = {}
     for match in _ENTRY_RE.finditer(text):
         attrs = _parse_attrs(match.group("attrs"))

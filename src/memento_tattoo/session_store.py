@@ -71,6 +71,9 @@ def write_session_block(root: Path, block: str, sess: str) -> Path:
             if existing == block:
                 return path
             raise FileExistsError(f"session file already exists with different content: {path}")
+        for record in load_sessions(paths.root):
+            if record.sess == sess:
+                raise FileExistsError(f"session id already exists in another source: {record.path}")
         _atomic_write(path, block)
     return path
 
@@ -78,6 +81,13 @@ def write_session_block(root: Path, block: str, sess: str) -> Path:
 def load_sessions(root: Path) -> list[SessionRecord]:
     records = [_parse_session_file(path) for path in session_source_files(root)]
     return sorted(records, key=lambda record: (record.date, record.sess))
+
+
+def duplicate_session_ids(root: Path) -> dict[str, list[SessionRecord]]:
+    grouped: dict[str, list[SessionRecord]] = {}
+    for record in load_sessions(root):
+        grouped.setdefault(record.sess, []).append(record)
+    return {sess: records for sess, records in grouped.items() if len(records) > 1}
 
 
 def _parse_session_file(path: Path) -> SessionRecord:

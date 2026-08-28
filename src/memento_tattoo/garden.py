@@ -6,7 +6,10 @@ from .recall import load_memento_notes
 from .retention import recurrence_counts, read_retention_events, retention_health_rate
 
 
-def build_digest(*, root: Path, today: str, promote_threshold: int = 2) -> str:
+DEFAULT_DIGEST_LIMIT = 8
+
+
+def build_digest(*, root: Path, today: str, promote_threshold: int = 2, limit: int = DEFAULT_DIGEST_LIMIT) -> str:
     today = today[:10]
     notes = load_memento_notes(root)
     lines = [
@@ -18,8 +21,13 @@ def build_digest(*, root: Path, today: str, promote_threshold: int = 2) -> str:
     ]
 
     def section(title: str, items: list[str]) -> None:
-        lines.append(f"## {title}")
-        lines.extend(items if items else ["- none"])
+        if limit > 0 and len(items) > limit:
+            lines.append(f"## {title} ({len(items)} total, showing {limit})")
+            lines.extend(items[:limit])
+            lines.append(f"- ...{len(items) - limit} more; use --limit 0 for the full list.")
+        else:
+            lines.append(f"## {title}")
+            lines.extend(items if items else ["- none"])
         lines.append("")
 
     section(
@@ -34,7 +42,7 @@ def build_digest(*, root: Path, today: str, promote_threshold: int = 2) -> str:
     missed: dict[str, int] = {}
     for event in read_retention_events(root=root):
         if event.get("decision") == "existing-missed":
-            note_id = event.get("note_id", "?")
+            note_id = event.get("cover_note_id") or event.get("covered_note_id") or event.get("note_id", "?")
             missed[note_id] = missed.get(note_id, 0) + 1
     section(
         "Repair candidates",
@@ -55,3 +63,17 @@ def build_digest(*, root: Path, today: str, promote_threshold: int = 2) -> str:
     )
     section("Tattoo merge suggestions", [])
     return "\n".join(lines)
+
+
+def digest_counts(*, root: Path, today: str, promote_threshold: int = 2) -> dict[str, int]:
+    notes = load_memento_notes(root)
+    events = read_retention_events(root=root)
+    missed = {
+        event.get("cover_note_id") or event.get("covered_note_id") or event.get("note_id")
+        for event in events if event.get("decision") == "existing-missed"
+    }
+    return {
+        "stale": sum(bool(note.review_after and note.review_after <= today[:10]) for note in notes),
+        "repair": len(missed - {None}),
+        "promote": sum(count >= promote_threshold for count in recurrence_counts(root=root).values()),
+    }

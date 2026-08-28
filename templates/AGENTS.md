@@ -25,19 +25,17 @@ When the user corrects the agent:
 
 1. Identify the situation.
 2. Search existing notes and tattoos for a lesson that should have applied.
-3. Write a note to `memento/notes.md` with:
+3. Add a checked note with `memento-tattoo note-add` containing:
    - `Situation:`
    - `Note:`
    - `aliases:`
    - optional `review_after:`
-4. Append one retention event to `memento/retention_log.jsonl`.
+4. Let the CLI append the corresponding retention event. Do not append a second event by hand.
 
 Use these retention decisions:
 
 - `new`: no existing lesson covered the situation.
 - `existing-missed`: a relevant lesson existed but did not affect the action.
-- `existing-repaired`: a relevant lesson existed and was improved.
-- `false-positive`: retrieval suggested a lesson that should not count.
 
 ## Session-end judgment
 
@@ -48,7 +46,7 @@ Scan the session and decide:
 - what belongs in the session record
 - whether project state changed enough to update `memory.md`
 - whether a correction or reflection should become a note
-- whether an existing note should be repaired instead of duplicated
+- whether an existing note should be strengthened instead of duplicated
 - whether there is a tattoo candidate worth proposing
 
 Use this test:
@@ -77,9 +75,8 @@ Use `save-commit` when writing several memory surfaces from one session. It writ
 
 When the agent has better context than the retrieval classifier, pass retention judgment fields to `note-add` or `save-commit`:
 
-- `decision`: `new`, `existing-missed`, `existing-repaired`, or `false-positive`
-- `repair`: short explanation of what was repaired or why the judgment changed
-- `covered_note_id`: existing note id that should have applied or was repaired
+- `decision`: `new` or `existing-missed`
+- `covered_note_id`: existing note id that should have applied
 
 Use `registry-queue` for shared project summary updates, then run `drain`. If a drain cannot acquire the local lock, leave the queued delta in place for a later drain.
 

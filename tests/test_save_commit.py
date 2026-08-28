@@ -44,6 +44,23 @@ def test_malformed_spec_fails_before_any_write(tmp_path: Path):
     assert not any(tmp_path.iterdir())
 
 
+def test_malformed_nested_spec_fails_before_any_write(tmp_path: Path):
+    for mutate, expected in (
+        (lambda spec: spec["session"].update({"topics": "not-a-list"}), "session.topics"),
+        (lambda spec: spec.update({"note_kind": "invalid"}), "note_kind"),
+        (lambda spec: spec.update({"registry_delta": {"action": "update"}}), "registry_delta missing"),
+        (lambda spec: spec.update({"project_edit": {"project": "project"}}), "project_edit.body"),
+        (lambda spec: spec.update({"verify": "not-a-list"}), "verify"),
+    ):
+        root = tmp_path / expected.replace(".", "-")
+        spec = _spec()
+        mutate(spec)
+        result = save_commit(spec, root=root)
+        assert not result.ok
+        assert expected in result.error
+        assert not root.exists() or not any(root.iterdir())
+
+
 def test_bad_session_id_rejected(tmp_path: Path):
     result = save_commit(_spec(sess="bad"), root=tmp_path)
 

@@ -1,8 +1,18 @@
 # memento-tattoo
 
-`memento-tattoo` is a correction-retention loop that helps coding agents stop repeating corrected mistakes across sessions.
+`memento-tattoo` is a user-owned memory policy for an AI operating system for work. The reference implementation is a correction-retention loop that helps coding agents stop repeating corrected mistakes across sessions.
+
+The loop is deliberately small:
+
+1. **Capture:** the agent decides what from the session should change a future action.
+2. **Persist:** project state, provisional lessons, and scarce operating rules are written to plain Markdown files.
+3. **Retrieve:** the next session loads the rules and recalls only the lessons relevant to the current situation.
+
+Chat, email, Slack, and documents can remain source systems. `memento-tattoo` provides the durable layer where decisions, corrections, lessons, and current state survive the session that produced them.
 
 If you want to understand or adapt the pattern, start with [IDEA.md](IDEA.md). If you want a working local CLI, install from source.
+
+For the seven-slide explanation, open [the HTML demo](docs/memento-tattoo-demo.html). Keep its Memento-inspired visual asset in the same folder.
 
 `memento-tattoo` is modeled after Christopher Nolan's *Memento*.
 
@@ -44,7 +54,7 @@ It measures note-write classification hygiene. It does not measure behavioral re
 
 ## Install from a checkout
 
-Requires Python 3.11 or newer. Use the matching interpreter for your system:
+Requires Python 3.11 or newer on macOS or Linux. The locking implementation uses POSIX `fcntl`, so Windows is not currently supported. Use the matching interpreter for your system:
 
 ```bash
 python3.12 -m venv .venv

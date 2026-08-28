@@ -13,6 +13,8 @@ from .lock import memory_lock
 DECISIONS = ("new", "existing-missed")
 _REPEAT_DECISIONS = ("existing-missed", "existing-repaired")
 _HEALTH_DECISIONS = ("new", "existing-missed")
+RETENTION_LOG_ROTATE_BYTES = 128 * 1024
+RETENTION_LOG_KEEP_EVENTS = 50
 DEFAULT_MIN_SCORE = 60
 # A true same-lesson cover stands out above its vocabulary neighbors; a flat tie
 # (several unrelated notes scoring alike on generic-word overlap) is NOT a cover.
@@ -40,20 +42,69 @@ def append_retention_event(event: dict, *, root: Path, assume_locked: bool = Fal
     line = json.dumps(event, ensure_ascii=False, sort_keys=True)
     if assume_locked:
         _append_line(path, line)
+        rotate_retention_log(root=root, assume_locked=True)
         return
     with memory_lock(paths_for(root).root):
         _append_line(path, line)
+        rotate_retention_log(root=root, assume_locked=True)
 
 
-def read_retention_events(*, root: Path) -> list[dict]:
-    path = paths_for(root).retention_log
-    if not path.exists():
-        return []
+def rotate_retention_log(
+    *,
+    root: Path,
+    rotate_bytes: int = RETENTION_LOG_ROTATE_BYTES,
+    keep: int = RETENTION_LOG_KEEP_EVENTS,
+    assume_locked: bool = False,
+) -> int:
+    paths = paths_for(root)
+    hot = paths.retention_log
+    if not hot.exists() or hot.stat().st_size <= rotate_bytes:
+        return 0
+
+    def _do() -> int:
+        lines = [line for line in hot.read_text(encoding="utf-8").splitlines() if line.strip()]
+        if not lines:
+            return 0
+        encoded = [(line + "\n").encode("utf-8") for line in lines]
+        retained_bytes = 0
+        retained_count = 0
+        retain_from = len(lines)
+        for index in range(len(lines) - 1, -1, -1):
+            size = len(encoded[index])
+            if retained_count >= keep or retained_bytes + size > rotate_bytes:
+                break
+            retained_bytes += size
+            retained_count += 1
+            retain_from = index
+        if retain_from == len(lines):
+            retain_from = len(lines) - 1
+        old, recent = lines[:retain_from], lines[retain_from:]
+        if not old:
+            return 0
+        for line in old:
+            _append_line(paths.retention_archive, line)
+        hot.write_text("\n".join(recent) + "\n", encoding="utf-8")
+        return len(old)
+
+    if assume_locked:
+        return _do()
+    with memory_lock(paths.root):
+        return _do()
+
+
+def read_retention_events(*, root: Path, include_archive: bool = True) -> list[dict]:
+    paths = paths_for(root)
+    sources = []
+    if include_archive and paths.retention_archive.exists():
+        sources.append(paths.retention_archive)
+    if paths.retention_log.exists():
+        sources.append(paths.retention_log)
     events = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        raw = raw.strip()
-        if raw:
-            events.append(json.loads(raw))
+    for path in sources:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            raw = raw.strip()
+            if raw:
+                events.append(json.loads(raw))
     return events
 
 

@@ -30,6 +30,32 @@ def tattoo_firing_counts(root: Optional[PathLike] = None) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def durable_tattoo_firing_counts(root: Optional[PathLike] = None) -> dict:
+    paths = paths_for(root)
+    sources = [paths.notes, paths.notes_archive]
+    if paths.sessions.exists():
+        sources.extend(paths.sessions.glob("sess_*.md"))
+        sources.extend((paths.sessions / "archive").glob("sess_*.md"))
+    counts: dict[str, dict] = {}
+    for path in sources:
+        if not path.exists() or not path.is_file():
+            continue
+        for tattoo_id in extract_tattoo_refs(path.read_text(encoding="utf-8", errors="replace")):
+            entry = counts.setdefault(tattoo_id, {"count": 0, "last_used": None})
+            entry["count"] += 1
+    return counts
+
+
+def effective_tattoo_firing_counts(root: Optional[PathLike] = None) -> dict:
+    cached = tattoo_firing_counts(root)
+    durable = durable_tattoo_firing_counts(root)
+    merged = {key: dict(value) for key, value in cached.items() if isinstance(value, dict)}
+    for key, value in durable.items():
+        current = merged.setdefault(key, {"count": 0, "last_used": None})
+        current["count"] = max(int(current.get("count", 0)), int(value["count"]))
+    return merged
+
+
 def firings_for_session(sess: str | None, counts: dict) -> int:
     if not sess:
         return 0

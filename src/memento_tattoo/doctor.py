@@ -8,8 +8,9 @@ from .config import paths_for, project_memory_path
 from .retention import read_retention_events
 from .rebuild import rebuild
 from .registry import _DELTA_RE
-from .session_store import load_sessions
+from .session_store import duplicate_session_ids, load_sessions
 from .tattoo_audit import audit_tattoos
+from .write_through import HOT_NOTES_ROTATE_BYTES
 
 
 def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool, str]:
@@ -27,6 +28,11 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
         else:
             status = "warn" if has_project_scope else "fail"
             checks.append((status, label, f"{path.name} missing"))
+
+    if paths.notes.exists():
+        size = paths.notes.stat().st_size
+        status = "warn" if size > HOT_NOTES_ROTATE_BYTES else "pass"
+        checks.append((status, "notes-size", f"{size} bytes; target {HOT_NOTES_ROTATE_BYTES}"))
 
     if paths.project.exists():
         checks.append(("pass", "project", f"{paths.project.name} present"))
@@ -52,7 +58,9 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
         except Exception as exc:
             checks.append(("fail", "retention", f"retention_log.jsonl unreadable: {exc}"))
         else:
-            checks.append(("pass", "retention", _retention_detail(paths.root, events)))
+            hot_bytes = paths.retention_log.stat().st_size
+            status = "warn" if hot_bytes > 128 * 1024 else "pass"
+            checks.append((status, "retention", _retention_detail(paths.root, events) + f"; hot bytes {hot_bytes}"))
             checks.append(_check_recall_probes(paths.root))
 
     if not paths.sessions.exists():
@@ -64,6 +72,11 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
             checks.append(("warn", "sessions", f"session parse warning: {exc}"))
         else:
             checks.append(("pass", "sessions", f"session files: {len(sessions)}"))
+            duplicates = duplicate_session_ids(paths.root)
+            if duplicates:
+                checks.append(("fail", "session-duplicates", f"conflicting ids: {', '.join(sorted(duplicates))}"))
+            else:
+                checks.append(("pass", "session-duplicates", "session ids unique"))
             ok_index, index_output = rebuild(paths.root, check=True)
             if ok_index:
                 checks.append(("pass", "session-index", index_output))
@@ -84,22 +97,48 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
         checks.append(("pass", "registry-queue", "queue empty"))
 
     conflicts = list((paths.queue / "conflicts").glob("*.registry.md")) if (paths.queue / "conflicts").exists() else []
+    archived_conflicts = list((paths.queue / "conflicts/archive").glob("*.registry.md")) if (paths.queue / "conflicts/archive").exists() else []
     if conflicts:
-        checks.append(("warn", "registry-conflicts", f"conflict files: {len(conflicts)}"))
+        oldest_days = int((datetime.now(timezone.utc).timestamp() - min(path.stat().st_mtime for path in conflicts)) / 86400)
+        status = "warn" if len(conflicts) > 200 or oldest_days > 30 else "pass"
+        checks.append((status, "registry-conflicts", f"hot {len(conflicts)}, archived {len(archived_conflicts)}, oldest hot {oldest_days}d"))
+    elif archived_conflicts:
+        checks.append(("pass", "registry-conflicts", f"hot 0, archived {len(archived_conflicts)}"))
 
     if paths.tattoos.exists():
         try:
             flagged_count = sum(1 for c in audit_tattoos(root=paths.root) if c.flagged)
-        except Exception:
+        except Exception as exc:
+            checks.append(("fail", "tattoo-lifecycle", f"audit failed: {exc}"))
             flagged_count = 0
         if flagged_count:
             noun = "tattoo" if flagged_count == 1 else "tattoos"
             checks.append(("warn", "tattoo-lifecycle", f"{flagged_count} {noun} due for review (run tattoo-audit)"))
 
+    firing_path = paths.root / "tattoo_firing.json"
+    if firing_path.exists():
+        import json
+        try:
+            data = json.loads(firing_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("top-level value must be an object")
+        except Exception as exc:
+            checks.append(("fail", "tattoo-firing", f"tattoo_firing.json unreadable: {exc}"))
+
+    from .garden import digest_counts
+    counts = digest_counts(root=paths.root, today=now_iso_date())
+    actionable = counts["stale"] + counts["repair"] + counts["promote"]
+    status = "warn" if actionable else "pass"
+    checks.append((status, "gardening", f"{counts['repair']} repair, {counts['stale']} stale, {counts['promote']} promotion candidates"))
+
     ok = all(status != "fail" for status, _, _ in checks)
     lines = ["MEMENTO_TATTOO_DOCTOR"]
     lines.extend(f"{status.upper():5} {name}: {detail}" for status, name, detail in checks)
     return ok, "\n".join(lines)
+
+
+def now_iso_date() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 RETENTION_RATE_MIN_EVENTS = 50

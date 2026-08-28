@@ -17,7 +17,7 @@ Plain Markdown is enough to try the correction-retention pattern. Use the CLI wh
 Core loop:
 
 ```text
-memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed] [--decision new|existing-missed] [--covered-note-id <note_id>] <text>
+memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed|pattern] [--decision new|existing-missed] [--covered-note-id <note_id>] <text>
 memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
 memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] [--append|--replace] <text>
 memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
@@ -27,8 +27,9 @@ Maintenance:
 
 ```text
 memento-tattoo --root <path> doctor [--project <project_dir>]...
-memento-tattoo --root <path> garden [--today YYYY-MM-DD] [--promote-threshold N]
+memento-tattoo --root <path> garden [--today YYYY-MM-DD] [--promote-threshold N] [--limit N]
 memento-tattoo --root <path> rebuild [--check]
+memento-tattoo --root <path> queue-maintenance [--days N] [--max-hot N] [--apply]
 ```
 
 Advanced local coordination:
@@ -111,7 +112,7 @@ For the full five-gate promotion standard, including merge-first and the provena
 
 `tattoo-audit` is a read-only maintenance command that flags promoted tattoos due for a keep, demote, or cut review. It is an age gate: a tattoo is flagged once it has gone longer than the review window (30 days by default) since it was promoted or since its last recorded review. The reference date comes from the tattoo's provenance marker, with a `reviewed:` watermark resetting the clock when a reviewer leaves one. A tattoo with no resolvable date, or a watermark that points at a session the audit cannot find, is also flagged so it gets a first look.
 
-Recurrence scoring is deliberately excluded from this command. Whether a tattoo has fired often enough to justify its always-on context cost is a semantic verdict, not a lexical match. A frequency count over raw note text would misclassify paraphrase matches and miss conceptual coverage, producing noisy signals in both directions. The design keeps `tattoo-audit` mechanical and fast, and leaves the keep or demote judgment to the Tier-2 reviewer with full context.
+Recurrence scoring is deliberately excluded from the review gate. The report displays citation telemetry from `tattoo_firing.json` and durable `[[tattoo_id]]` references in notes and sessions, but those counts do not decide whether a tattoo is due for review or whether it should be kept. Conceptual coverage remains a Tier-2 judgment.
 
 The command produces no writes. Acting on its output requires explicit agent judgment and the same user-approval gate that governs initial promotion.
 
@@ -138,6 +139,8 @@ Run `rebuild` to refresh them or `rebuild --check` to detect drift.
 ```
 
 `drain` applies queued deltas under the root lock. Same-slug collisions are deterministic: the newest delta wins, loser files move to `_queue/conflicts/`, and the winner gets a `registry-conflict` comment.
+
+`queue-maintenance` previews conflicts older than 30 days or beyond the newest 200 by default. Add `--apply` to move those files into `_queue/conflicts/archive/`; no conflict artifact is deleted.
 
 ## Save Commit
 
@@ -166,7 +169,7 @@ Use `retention.decision` when the agent has better context than the retrieval cl
 
 When adding a `correction` or `reflection` note, the package first ranks existing notes for the new situation. It then records whether the system found a strong existing cover or whether the situation appears new.
 
-This makes repeated correction visible. If the same lesson was already present but did not fire, that is not just a new note; it is evidence that the retrieval trigger may need repair.
+This makes repeated correction visible. If the same lesson was already present but did not fire, the retrieval trigger may need repair.
 
 By default, `note-add` records the CLI's suggested decision. Agents can override that decision:
 
@@ -204,7 +207,7 @@ Older logs may contain `existing-repaired` or `false-positive`; readers tolerate
 
 ## Gardener Digest
 
-The gardener is read-only. It lists:
+The read-only gardener reports:
 
 - notes past their `review_after` date
 - lessons with repeated missed retrievals

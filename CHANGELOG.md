@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-08-28
+
+- Hardens checked saves with complete preflight validation, per-surface marker checks, and registry verification.
+- Preserves complete retention history while bounding the hot log by bytes, and bounds registry conflicts through lossless archival.
+- Prevents cross-store session-id collisions and reports duplicate session ids, malformed firing telemetry, queue corruption, and actionable gardening state in `doctor`.
+- Derives tattoo citation counts from durable notes and sessions when the JSON cache is stale or missing.
+- Bounds gardener output by default, fixes recurrence attribution, and adds explicit full-output and queue-maintenance controls.
+- Adds the public seven-slide HTML demo and its visual asset, and documents the POSIX platform requirement.
+
 ## 0.3.0 - 2026-07-11
 
 - Adds a deterministic cover-detection evaluation with independently phrased positive and negative queries; the seeded baseline is 3/3 true covers flagged and 0/3 negative queries flagged.

@@ -14,6 +14,7 @@ class MementoPaths:
     project: Path
     tattoos: Path
     retention_log: Path
+    retention_archive: Path
     lock: Path
     sessions: Path
     reserved_ids: Path
@@ -48,6 +49,7 @@ def paths_for(root: Optional[PathLike] = None) -> MementoPaths:
         project=base / "project.md",
         tattoos=base / "tattoos.md",
         retention_log=base / "retention_log.jsonl",
+        retention_archive=base / "retention_log_archive.jsonl",
         lock=base / ".memento.lock",
         sessions=base / "sessions",
         reserved_ids=base / ".reserved_ids",

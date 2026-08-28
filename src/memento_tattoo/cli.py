@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from .doctor import run_doctor
-from .garden import build_digest
+from .garden import DEFAULT_DIGEST_LIMIT, build_digest
 from ._time import now_iso
 from .recall import render_ranked_notes
 from .retention import DECISIONS
@@ -50,6 +50,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     garden = subparsers.add_parser("garden", help="emit a read-only gardening digest")
     garden.add_argument("--today", required=False, default=None)
     garden.add_argument("--promote-threshold", type=int, default=2)
+    garden.add_argument("--limit", type=int, default=DEFAULT_DIGEST_LIMIT, help="max items per section; 0 means all")
 
     doctor = subparsers.add_parser("doctor", help="run root health checks")
     doctor.add_argument("--project", action="append", default=[], help="project directory whose memory.md should be checked")
@@ -81,6 +82,11 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     drain_parser = subparsers.add_parser("drain", help="drain queued registry deltas")
     drain_parser.add_argument("--timeout", type=float, default=10.0)
+
+    queue_maintenance = subparsers.add_parser("queue-maintenance", help="archive old or excess registry conflicts")
+    queue_maintenance.add_argument("--days", type=int, default=30)
+    queue_maintenance.add_argument("--max-hot", type=int, default=200)
+    queue_maintenance.add_argument("--apply", action="store_true")
 
     save = subparsers.add_parser("save-commit", help="run a validated multi-surface save from a JSON spec")
     save.add_argument("--spec", required=True)
@@ -139,7 +145,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.command == "garden":
-        print(build_digest(root=root, today=args.today or now_iso()[:10], promote_threshold=args.promote_threshold))
+        print(build_digest(root=root, today=args.today or now_iso()[:10], promote_threshold=args.promote_threshold, limit=args.limit))
         return 0
 
     if args.command == "doctor":
@@ -194,6 +200,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         result = drain(root, timeout=args.timeout)
         print(result.render())
         return 0 if result.ok else 1
+
+    if args.command == "queue-maintenance":
+        from .registry import archive_registry_conflicts, conflict_archive_candidates
+
+        candidates = conflict_archive_candidates(root, days=args.days, max_hot=args.max_hot)
+        print(f"QUEUE_MAINTENANCE {len(candidates)} candidate(s)")
+        for path in candidates:
+            print(path.relative_to(root))
+        if args.apply and candidates:
+            print(f"archived {archive_registry_conflicts(root, days=args.days, max_hot=args.max_hot)} conflict artifact(s)")
+        return 0
 
     if args.command == "save-commit":
         from .save_commit import save_commit
