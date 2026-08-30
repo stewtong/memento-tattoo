@@ -1,5 +1,5 @@
 include README.md
-include IDEA.md
+include MEMENTO-PATTERN.md
 include LICENSE
 include pyproject.toml
 include CONTRIBUTING.md
@@ -19,6 +19,7 @@ prune plans
 prune research
 prune specs
 exclude memory.md
+exclude IDEA.md
 exclude memento-tattoo-README-draft.md
 exclude docs/memory-layer-judgment-spec.md
 global-exclude __pycache__

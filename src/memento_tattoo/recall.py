@@ -42,6 +42,23 @@ class RankedMementoNote:
         return self.note.source_name
 
 
+@dataclass(frozen=True)
+class AliasCoverage:
+    aliased: int
+    total: int
+
+
+def alias_coverage_summary(root: Path) -> dict[str, AliasCoverage]:
+    """Summarize aliases on valid hot and archived note records."""
+    paths = paths_for(root)
+    hot = _load_notes_file(paths.notes)
+    archive = _load_notes_file(paths.notes_archive, "notes_archive.md")
+    return {
+        "hot": AliasCoverage(aliased=sum(bool(note.aliases) for note in hot), total=len(hot)),
+        "archive": AliasCoverage(aliased=sum(bool(note.aliases) for note in archive), total=len(archive)),
+    }
+
+
 def load_memento_notes(root: Path, projects: Optional[list[Path]] = None) -> list[MementoNote]:
     paths = paths_for(root)
     notes: list[MementoNote] = []

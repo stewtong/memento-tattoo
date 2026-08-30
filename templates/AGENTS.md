@@ -9,6 +9,7 @@ Use this template to add a lightweight correction-retention loop to a repo. Adju
 - `memento/tattoos.md`: scarce promoted lessons that should change behavior across broad task classes.
 - `memento/retention_log.jsonl`: append-only record of checked retrieval decisions.
 - `memento/sessions/`: per-session save records and generated indexes.
+- `memento/sessions/archive/`: optional archived session records that remain readable.
 - `memento/registry.md`: optional compact project registry updated through `memento/_queue/`.
 
 ## Startup loading
@@ -119,6 +120,8 @@ Keep tattoos scarce. If everything is promoted, nothing is visible.
 
 Do not write a tattoo until the user explicitly approves the proposed wording. First surface the candidate and the reason it passes the bar.
 
+If the user rejects the candidate, retain any useful lesson as an ordinary note and do not keep it in the pending candidate cohort. If the user takes no action, park the candidate in a durable non-tattoo surface for later review. Silence is never approval. A parked candidate is retrievable evidence, not always-loaded instruction, and has no promotion status.
+
 For the full gate (five tattoo checks, four note checks, per-field rules, and the merge-first caveat that a genuine sibling shares the action and not just the theme), see the authoring-standards doc in the memento-tattoo package.
 
 ## When to update project memory
@@ -152,3 +155,11 @@ Use this tattoo shape:
 ```
 
 Use one JSON object per line in `retention_log.jsonl`.
+
+## Archive and maintenance controls
+
+When notes rotate, search `notes.md` and `notes_archive.md` together. Keep alias coverage visible as `aliased/total` for hot and archived stores separately. Review low coverage and repair aliases deliberately; never invent aliases automatically.
+
+Treat 25 tattoos, 7,168 bytes of tattoo text, 300 characters per tattoo, and 60 percent archived-note alias coverage as starting recommendations. Adapt or disable a warning for the local context while retaining the measurement. Tattoo thresholds trigger keep, demote, merge, or cut review and never authorize automatic removal.
+
+If sessions are retained, keep IDs stable in hot and archived stores. Before archiving, choose the age policy, preview exact source and destination paths, check collisions, preserve content, and keep archived sessions in lookup and rebuild. Do not archive concurrently with another writer unless the implementation serializes writes with a lock or equivalent coordination.

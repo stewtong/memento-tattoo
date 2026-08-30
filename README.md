@@ -1,3 +1,5 @@
+<!-- register: public project README | reader: coding-agent users and contributors | consumed: GitHub skim -->
+
 # memento-tattoo
 
 `memento-tattoo` is a user-owned memory policy for an AI operating system for work. The reference implementation is a correction-retention loop that helps coding agents stop repeating corrected mistakes across sessions.
@@ -10,9 +12,9 @@ The loop is deliberately small:
 
 Chat, email, Slack, and documents can remain source systems. `memento-tattoo` provides the durable layer where decisions, corrections, lessons, and current state survive the session that produced them.
 
-If you want to understand or adapt the pattern, start with [IDEA.md](IDEA.md). If you want a working local CLI, install from source.
+If you want to understand or adapt the canonical pattern, start with [MEMENTO-PATTERN.md](MEMENTO-PATTERN.md). If you want a working local CLI, install from source.
 
-For the seven-slide explanation, open [the HTML demo](docs/memento-tattoo-demo.html). Keep its Memento-inspired visual asset in the same folder.
+For the seven-slide explanation, clone or download the repository, then open [the HTML demo](docs/memento-tattoo-demo.html) in a browser. Keep its Memento-inspired visual asset in the same folder.
 
 `memento-tattoo` is modeled after Christopher Nolan's *Memento*.
 
@@ -128,6 +130,8 @@ What from this session should change a future action?
 
 A tattoo is not a good tip, a summary, or a project fact. It is a scarce operating lesson meant to be visible before broad classes of future action. Propose one only when, had it been loaded at the start of the session, it would have dramatically improved the course of action, and the lesson is durable across unrelated sessions, behavioral rather than informational, broader than the file that produced it, and short enough to load often. Promotion requires explicit user approval before running `tattoo-add`.
 
+At session end, the agent manually proposes the strongest candidate and its reason for clearing the bar. The CLI neither proposes nor parks candidates. Explicit approval promotes the proposed wording. Rejection leaves any useful lesson as an ordinary note. No action parks the candidate in a durable non-tattoo surface, such as a session marker or tagged note, for later review. Silence is never approval.
+
 ## How agents invoke the CLI
 
 The CLI is usually not typed by hand during normal agent work. Map natural-language commands into `AGENTS.md`, `CLAUDE.md`, or your agent runner's instruction file.
@@ -142,7 +146,7 @@ Common mappings:
   -> run `memento-tattoo --root <memento_root> note-add --sess <sess_id> --kind correction "<lesson>"`
 
 "save work"
-  -> scan the session, reserve a session id, then call `session-add`, `project-edit`, `note-add`, and optionally propose `tattoo-add`
+  -> scan the session, reserve a session id, draft one `save-commit` spec, and run `save-commit`; surface any tattoo candidate separately and run `tattoo-add` only after explicit approval
 
 "check memory"
   -> run `memento-tattoo --root <memento_root> doctor --project <project_dir>`
@@ -175,6 +179,7 @@ This is designed for a local filesystem. Network filesystems and sync folders ma
 - Corrections matter more than transcripts.
 - Promotion should be scarce. The tattoo layer is valuable because it refuses to be everything. `tattoo-audit` flags promoted lessons that are due for a keep, demote, or cut review so the tattoo set does not grow without bound.
 - `note-add` keeps the hot `notes.md` bounded by rotating older blocks out to `notes_archive.md`; recall reads both files, so rotation stays non-lossy.
+- `doctor` reports alias coverage and tattoo-budget pressure as review signals. It does not repair aliases, demote tattoos, or remove lessons.
 
 ## CLI at a glance
 
@@ -196,6 +201,9 @@ memento-tattoo --root <path> doctor
 memento-tattoo --root <path> garden
 memento-tattoo --root <path> rebuild --check
 memento-tattoo --root <path> tattoo-audit  # flags promoted lessons due for keep/demote/cut review
+memento-tattoo --root <path> session-list --limit 50
+memento-tattoo --root <path> session-archive --days 30 --limit 100  # dry run
+memento-tattoo --root <path> session-archive --days 30 --limit 100 --apply
 ```
 
 Advanced local coordination:
@@ -221,6 +229,8 @@ memento/
   notes_archive.md
   tattoos.md
   retention_log.jsonl
+  retention_log_archive.jsonl
+  tattoo_firing.json
   registry.md
   sessions/
     sess_abcd.md
@@ -228,6 +238,9 @@ memento/
     index-recent.md
     archive/
   _queue/
+    applied/
+    conflicts/
+      archive/
   .memento.lock
   .reserved_ids
 ```
@@ -236,12 +249,18 @@ memento/
 - `memento/notes.md`: provisional lessons and corrections.
 - `memento/notes_archive.md`: older note blocks rotated out of the hot file; still read during recall.
 - `memento/tattoos.md`: promoted lessons that should be broadly reusable.
-- `memento/retention_log.jsonl`: append-only record of checked retrieval decisions.
+- `memento/retention_log.jsonl`: hot portion of the checked-retrieval history; older complete events rotate out by byte target.
+- `memento/retention_log_archive.jsonl`: append-only archive of rotated retention events. Readers combine it with the hot log, so the logical history remains complete.
+- `memento/tattoo_firing.json`: supplemental local citation counter used by tattoo review. Durable note and session citations remain authoritative when this cache is stale or missing.
 - `memento/registry.md`: optional compact index of project summaries.
 - `memento/sessions/`: per-session save records and generated indexes; `archive/` holds rotated-out session files (still counted for ID-collision safety).
-- `memento/_queue/`: durable registry deltas waiting for drain.
+- `memento/_queue/`: durable registry deltas waiting for drain, applied-delta audit files, and conflict artifacts. Old or excess conflicts move to `conflicts/archive/` without deletion.
 - `memento/.memento.lock`: advisory lock for short write operations.
 - `memento/.reserved_ids`: short-lived session-ID reservations so parallel agents do not collide before a session file is written.
+
+`session-list` includes hot and archived records by default. `session-archive` moves only records older than the caller-selected `--days` cutoff, previews exact paths by default, and moves files only with `--apply`. Archived sessions remain readable to lookup, rebuild, and collision checks.
+
+`doctor` reports note alias coverage as `aliased/total` for hot and archived note stores separately. Its archived-store recommendation starts at 60 percent coverage. It also reports tattoo count, total UTF-8 bytes, and over-length tattoos. The starting review recommendations are 25 tattoos, 7,168 bytes, and 300 characters per tattoo. Each warning can be changed or disabled without hiding its measurement. Warnings start a keep, demote, merge, or cut review and never remove a lesson automatically.
 
 ## Out of scope
 
@@ -249,7 +268,7 @@ This reference implementation does not include vector search, embeddings, a data
 
 ## Docs
 
-- [Idea file](IDEA.md)
+- [Canonical Memento pattern](MEMENTO-PATTERN.md)
 - [Agent instruction template](templates/AGENTS.md)
 - [Basic failure-loop example](examples/basic/README.md)
 - [Concepts](docs/concepts.md)

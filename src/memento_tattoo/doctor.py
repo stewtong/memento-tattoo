@@ -9,11 +9,26 @@ from .retention import read_retention_events
 from .rebuild import rebuild
 from .registry import _DELTA_RE
 from .session_store import duplicate_session_ids, load_sessions
-from .tattoo_audit import audit_tattoos
+from .tattoo_audit import audit_tattoos, parse_tattoos
 from .write_through import HOT_NOTES_ROTATE_BYTES
 
 
-def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool, str]:
+RECOMMENDED_ALIAS_COVERAGE_PERCENT = 60
+RECOMMENDED_TATTOO_COUNT = 25
+RECOMMENDED_TATTOO_BYTES = 7_168
+RECOMMENDED_TATTOO_LENGTH = 300
+TATTOO_SAMPLE_LIMIT = 3
+
+
+def run_doctor(
+    root: Path,
+    projects: Optional[list[Path]] = None,
+    *,
+    alias_coverage_warn: float = RECOMMENDED_ALIAS_COVERAGE_PERCENT,
+    tattoo_count_warn: int = RECOMMENDED_TATTOO_COUNT,
+    tattoo_bytes_warn: int = RECOMMENDED_TATTOO_BYTES,
+    tattoo_length_warn: int = RECOMMENDED_TATTOO_LENGTH,
+) -> tuple[bool, str]:
     paths = paths_for(root)
     checks: list[tuple[str, str, str]] = []
     project_list = projects or []
@@ -33,6 +48,11 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
         size = paths.notes.stat().st_size
         status = "warn" if size > HOT_NOTES_ROTATE_BYTES else "pass"
         checks.append((status, "notes-size", f"{size} bytes; target {HOT_NOTES_ROTATE_BYTES}"))
+
+    try:
+        checks.append(_check_alias_coverage(paths.root, alias_coverage_warn))
+    except Exception as exc:
+        checks.append(("fail", "alias-coverage", f"note sources unreadable: {exc}"))
 
     if paths.project.exists():
         checks.append(("pass", "project", f"{paths.project.name} present"))
@@ -106,6 +126,18 @@ def run_doctor(root: Path, projects: Optional[list[Path]] = None) -> tuple[bool,
         checks.append(("pass", "registry-conflicts", f"hot 0, archived {len(archived_conflicts)}"))
 
     if paths.tattoos.exists():
+        try:
+            tattoo_text = paths.tattoos.read_text(encoding="utf-8")
+            checks.append(
+                _check_tattoo_pressure(
+                    tattoo_text,
+                    count_warn=tattoo_count_warn,
+                    bytes_warn=tattoo_bytes_warn,
+                    length_warn=tattoo_length_warn,
+                )
+            )
+        except Exception as exc:
+            checks.append(("fail", "tattoo-pressure", f"tattoos.md unreadable: {exc}"))
         try:
             flagged_count = sum(1 for c in audit_tattoos(root=paths.root) if c.flagged)
         except Exception as exc:
@@ -203,3 +235,55 @@ def _expired_reservations(path: Path) -> list[str]:
         if expiry <= now:
             expired.append(parts[0])
     return expired
+
+
+def _check_alias_coverage(root: Path, warn_percent: float) -> tuple[str, str, str]:
+    from .recall import alias_coverage_summary
+
+    coverage = alias_coverage_summary(root)
+    hot = coverage["hot"]
+    archive = coverage["archive"]
+    detail = f"hot {hot.aliased}/{hot.total} aliased; archive {archive.aliased}/{archive.total} aliased"
+    below = archive.total and archive.aliased * 100 < warn_percent * archive.total
+    if warn_percent > 0 and below:
+        detail += f"; archive coverage below {warn_percent:g}% review threshold"
+        return "warn", "alias-coverage", detail
+    return "pass", "alias-coverage", detail
+
+
+def _check_tattoo_pressure(
+    text: str,
+    *,
+    count_warn: int,
+    bytes_warn: int,
+    length_warn: int,
+) -> tuple[str, str, str]:
+    tattoos = parse_tattoos(text)
+    count = len(tattoos)
+    byte_count = sum(len(tattoo.text.encode("utf-8")) for tattoo in tattoos)
+    measured_length = length_warn or RECOMMENDED_TATTOO_LENGTH
+    over_length = [tattoo for tattoo in tattoos if len(tattoo.text) > measured_length]
+    detail = f"{count} tattoos; {byte_count} UTF-8 bytes; {len(over_length)} over {measured_length:g} characters"
+
+    warnings: list[str] = []
+    if count_warn > 0 and count > count_warn:
+        warnings.append(f"count over {count_warn:g}")
+    if bytes_warn > 0 and byte_count > bytes_warn:
+        warnings.append(f"bytes over {bytes_warn:g}")
+    if length_warn > 0 and over_length:
+        sample = ", ".join(
+            f"{len(tattoo.text)}ch:{_one_line(tattoo.text, 32)}"
+            for tattoo in over_length[:TATTOO_SAMPLE_LIMIT]
+        )
+        warnings.append(f"length over {length_warn:g} ({sample})")
+    if warnings:
+        detail += "; " + "; ".join(warnings) + "; run tattoo-audit for keep, demote, or cut review"
+        return "warn", "tattoo-pressure", detail
+    return "pass", "tattoo-pressure", detail
+
+
+def _one_line(text: str, limit: int) -> str:
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: limit - 3].rstrip() + "..."

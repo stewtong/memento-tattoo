@@ -37,8 +37,8 @@ class TattooCandidate:
     reason: str
 
 
-@dataclass
-class _RawTattoo:
+@dataclass(frozen=True)
+class ParsedTattoo:
     text: str
     origin_sess: Optional[str]
     reviewed_sess: Optional[str]
@@ -61,13 +61,13 @@ def _parse_session_date(raw: str) -> Optional[date]:
         return None
 
 
-def _parse_tattoos(text: str) -> list[_RawTattoo]:
+def parse_tattoos(text: str) -> list[ParsedTattoo]:
     """Pair every top-level ``- `` bullet with its nearest preceding marker line.
 
     Markers sit on their own line above the bullet. A marker is consumed by the
     first bullet that follows it; blank or header lines do not clear it.
     """
-    out: list[_RawTattoo] = []
+    out: list[ParsedTattoo] = []
     current = None
     for line in text.splitlines():
         stripped = line.strip()
@@ -79,7 +79,7 @@ def _parse_tattoos(text: str) -> list[_RawTattoo]:
             ts_date = _parse_ts(marker.ts) if marker else None
             reviewed = m.group(1) if (m := _REVIEWED_RE.search(body)) else None
             clean = _REVIEWED_RE.sub("", _COMMENT_RE.sub("", body)).strip()
-            out.append(_RawTattoo(text=clean, origin_sess=origin, reviewed_sess=reviewed, ts_date=ts_date))
+            out.append(ParsedTattoo(text=clean, origin_sess=origin, reviewed_sess=reviewed, ts_date=ts_date))
         elif stripped.startswith("<!--") and (marker := parse_delta_marker(stripped)):
             current = marker
     return out
@@ -93,7 +93,7 @@ def audit_tattoos(
 ) -> list[TattooCandidate]:
     paths = paths_for(root)
     text = paths.tattoos.read_text(encoding="utf-8", errors="replace") if paths.tattoos.exists() else ""
-    raw = _parse_tattoos(text)
+    raw = parse_tattoos(text)
 
     session_dates: dict[str, date] = {}
     for record in load_sessions(paths.root):

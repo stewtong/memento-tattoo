@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Optional
 
-from .doctor import run_doctor
+from .doctor import (
+    RECOMMENDED_ALIAS_COVERAGE_PERCENT,
+    RECOMMENDED_TATTOO_BYTES,
+    RECOMMENDED_TATTOO_COUNT,
+    RECOMMENDED_TATTOO_LENGTH,
+    run_doctor,
+)
 from .garden import DEFAULT_DIGEST_LIMIT, build_digest
 from ._time import now_iso
 from .recall import render_ranked_notes
@@ -54,6 +61,15 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     doctor = subparsers.add_parser("doctor", help="run root health checks")
     doctor.add_argument("--project", action="append", default=[], help="project directory whose memory.md should be checked")
+    doctor.add_argument(
+        "--alias-coverage-warn",
+        type=_nonnegative_float,
+        default=RECOMMENDED_ALIAS_COVERAGE_PERCENT,
+        metavar="PERCENT",
+    )
+    doctor.add_argument("--tattoo-count-warn", type=_nonnegative_int, default=RECOMMENDED_TATTOO_COUNT, metavar="COUNT")
+    doctor.add_argument("--tattoo-bytes-warn", type=_nonnegative_int, default=RECOMMENDED_TATTOO_BYTES, metavar="BYTES")
+    doctor.add_argument("--tattoo-length-warn", type=_nonnegative_int, default=RECOMMENDED_TATTOO_LENGTH, metavar="CHARS")
 
     subparsers.add_parser("new-id", help="generate and reserve a collision-safe session id")
 
@@ -67,6 +83,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     session.add_argument("--pending", default="none.")
     session.add_argument("--insights", default="none.")
     session.add_argument("--files", default="")
+
+    session_list = subparsers.add_parser("session-list", help="list hot and archived session records")
+    session_list.add_argument("--limit", type=_nonnegative_int, default=50, help="max records; 0 means all")
+    session_filter = session_list.add_mutually_exclusive_group()
+    session_filter.add_argument("--hot-only", action="store_true")
+    session_filter.add_argument("--archive-only", action="store_true")
+
+    session_archive = subparsers.add_parser("session-archive", help="preview or apply bounded session archival")
+    session_archive.add_argument("--days", type=_nonnegative_int, required=True, help="archive sessions strictly older than this age")
+    session_archive.add_argument("--limit", type=_nonnegative_int, default=100, help="max moves; 0 means all")
+    session_archive.add_argument("--apply", action="store_true", help="apply the displayed moves; default is dry-run")
 
     tattoo_audit_p = subparsers.add_parser("tattoo-audit", help="report tattoos due for review")
     tattoo_audit_p.add_argument("--window-days", type=int, default=30, help="age threshold in days (default 30)")
@@ -149,7 +176,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.command == "doctor":
-        ok, output = run_doctor(root, projects=[Path(item) for item in args.project])
+        ok, output = run_doctor(
+            root,
+            projects=[Path(item) for item in args.project],
+            alias_coverage_warn=args.alias_coverage_warn,
+            tattoo_count_warn=args.tattoo_count_warn,
+            tattoo_bytes_warn=args.tattoo_bytes_warn,
+            tattoo_length_warn=args.tattoo_length_warn,
+        )
         print(output)
         return 0 if ok else 1
 
@@ -163,21 +197,66 @@ def main(argv: Optional[list[str]] = None) -> int:
         from .new_id import prune_reservations
         from .session_store import render_session_block, write_session_block
 
-        block = render_session_block(
-            args.sess,
-            date=args.date,
-            agent=args.agent,
-            topics=_csv_arg(args.topics),
-            significance=args.significance,
-            accomplished=args.accomplished,
-            started=args.started,
-            pending=args.pending,
-            insights=args.insights,
-            files=_semi_arg(args.files),
-        )
+        try:
+            block = render_session_block(
+                args.sess,
+                date=args.date,
+                agent=args.agent,
+                topics=_csv_arg(args.topics),
+                significance=args.significance,
+                accomplished=args.accomplished,
+                started=args.started,
+                pending=args.pending,
+                insights=args.insights,
+                files=_semi_arg(args.files),
+            )
+        except ValueError as exc:
+            print(f"error: {exc}")
+            return 2
         path = write_session_block(root, block, args.sess)
         prune_reservations(root)
         print(f"applied {path}")
+        return 0
+
+    if args.command == "session-list":
+        from .session_store import load_sessions, parse_session_date
+
+        try:
+            records = load_sessions(root)
+            records.sort(key=lambda record: (parse_session_date(record.date), record.sess), reverse=True)
+        except (OSError, ValueError) as exc:
+            print(f"error: {exc}")
+            return 1
+        archive_dir = (root / "sessions" / "archive").resolve()
+        if args.hot_only:
+            records = [record for record in records if record.path.parent.resolve() != archive_dir]
+        elif args.archive_only:
+            records = [record for record in records if record.path.parent.resolve() == archive_dir]
+        if args.limit:
+            records = records[: args.limit]
+        print(f"SESSION_LIST {len(records)} record(s)")
+        print("session_id\tdate\tagent\tsignificance\ttopics\tlocation")
+        for record in records:
+            location = "archive" if record.path.parent.resolve() == archive_dir else "hot"
+            print(
+                f"{record.sess}\t{record.date}\t{record.agent}\t{record.significance}\t"
+                f"{', '.join(record.topics)}\t{location}"
+            )
+        return 0
+
+    if args.command == "session-archive":
+        from .session_archive import apply_archive, archive_candidates, render_archive_plan
+
+        try:
+            moves = archive_candidates(root, days=args.days, limit=args.limit)
+            plan = render_archive_plan(moves, root, applied=args.apply)
+            print(plan)
+            if args.apply:
+                moved = apply_archive(moves, root)
+                print(f"archived {moved} session(s)")
+        except (OSError, RuntimeError, ValueError) as exc:
+            print(f"error: {exc}")
+            return 1
         return 0
 
     if args.command == "rebuild":
@@ -230,3 +309,17 @@ def _csv_arg(text: str) -> list[str]:
 
 def _semi_arg(text: str) -> list[str]:
     return [item.strip() for item in text.split(";") if item.strip()]
+
+
+def _nonnegative_int(text: str) -> int:
+    value = int(text)
+    if value < 0:
+        raise argparse.ArgumentTypeError("must be nonnegative")
+    return value
+
+
+def _nonnegative_float(text: str) -> float:
+    value = float(text)
+    if not math.isfinite(value) or value < 0:
+        raise argparse.ArgumentTypeError("must be finite and nonnegative")
+    return value

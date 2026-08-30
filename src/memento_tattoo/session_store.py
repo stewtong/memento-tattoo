@@ -4,6 +4,7 @@ import re
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .agent import normalize_agent
@@ -49,6 +50,7 @@ def render_session_block(
     insights: str,
     files: list[str],
 ) -> str:
+    parse_session_date(date)
     return (
         "---\n"
         f"[{sess} | {date} | {normalize_agent(agent)} | {', '.join(topics)} | {significance}]\n"
@@ -79,8 +81,8 @@ def write_session_block(root: Path, block: str, sess: str) -> Path:
 
 
 def load_sessions(root: Path) -> list[SessionRecord]:
-    records = [_parse_session_file(path) for path in session_source_files(root)]
-    return sorted(records, key=lambda record: (record.date, record.sess))
+    records = [parse_session_file(path) for path in session_source_files(root)]
+    return sorted(records, key=lambda record: (parse_session_date(record.date), record.sess))
 
 
 def duplicate_session_ids(root: Path) -> dict[str, list[SessionRecord]]:
@@ -90,12 +92,14 @@ def duplicate_session_ids(root: Path) -> dict[str, list[SessionRecord]]:
     return {sess: records for sess, records in grouped.items() if len(records) > 1}
 
 
-def _parse_session_file(path: Path) -> SessionRecord:
+def parse_session_file(path: Path) -> SessionRecord:
     text = path.read_text(encoding="utf-8")
-    header_match = re.search(r"^\[(.+?)\]\s*$", text, re.MULTILINE)
-    if not header_match:
+    header_matches = re.findall(r"^\[(.+?)\]\s*$", text, re.MULTILINE)
+    if not header_matches:
         raise ValueError(f"missing session header: {path}")
-    parts = [part.strip() for part in header_match.group(1).split("|")]
+    if len(header_matches) != 1:
+        raise ValueError(f"expected exactly one session record: {path}")
+    parts = [part.strip() for part in header_matches[0].split("|")]
     if len(parts) >= 5:
         sess, date, agent, topics, significance = parts[:5]
     elif len(parts) == 3:
@@ -104,6 +108,10 @@ def _parse_session_file(path: Path) -> SessionRecord:
         significance = "unknown"
     else:
         raise ValueError(f"invalid session header: {path}")
+    try:
+        parse_session_date(date)
+    except ValueError as exc:
+        raise ValueError(f"invalid session date in {path}: {date}") from exc
     return SessionRecord(
         sess=sess,
         date=date,
@@ -117,6 +125,19 @@ def _parse_session_file(path: Path) -> SessionRecord:
         files=_semi(_extract_field(text, "Files")),
         path=path,
     )
+
+
+def parse_session_date(value: str) -> datetime:
+    text = value.strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}(?:$|[ T])", text):
+        raise ValueError(f"invalid session date: {value}")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError(f"invalid session date: {value}") from exc
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
 
 
 def _extract_field(text: str, field_name: str) -> str:

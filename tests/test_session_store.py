@@ -4,6 +4,8 @@ import pytest
 
 from memento_tattoo.session_store import (
     load_sessions,
+    parse_session_date,
+    parse_session_file,
     render_session_block,
     session_source_files,
     write_session_block,
@@ -107,3 +109,48 @@ def test_write_session_block_refuses_different_existing_content(tmp_path: Path):
 
     with pytest.raises(FileExistsError):
         write_session_block(tmp_path, second, "sess_abcd")
+
+
+def test_parse_session_file_requires_exactly_one_record(tmp_path: Path):
+    path = tmp_path / "sess_double.md"
+    path.write_text(
+        "[sess_one | 2026-06-01 | codex | tests | low]\n"
+        "[sess_two | 2026-06-02 | codex | tests | low]\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="exactly one"):
+        parse_session_file(path)
+
+
+def test_parse_session_date_accepts_existing_timestamp_and_normalizes_offsets():
+    assert parse_session_date("2026-06-17 18:24").isoformat() == "2026-06-17T18:24:00"
+    assert parse_session_date("2026-06-17 18:24-05:00").isoformat() == "2026-06-17T23:24:00"
+
+
+def test_render_session_block_rejects_malformed_date():
+    with pytest.raises(ValueError, match="invalid session date"):
+        render_session_block(
+            "sess_bad",
+            date="sometime yesterday",
+            agent="codex",
+            topics=["tests"],
+            significance="low",
+            accomplished="none.",
+            started="none.",
+            pending="none.",
+            insights="none.",
+            files=[],
+        )
+
+
+def test_load_sessions_rejects_malformed_stored_date(tmp_path: Path):
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    (sessions / "sess_bad.md").write_text(
+        "[sess_bad | someday | codex | tests | low]\nAccomplished: none.\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="invalid session date in"):
+        load_sessions(tmp_path)

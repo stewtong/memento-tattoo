@@ -35,6 +35,10 @@ test = ["pytest>=8"]
 [project.scripts]
 memento-tattoo = "memento_tattoo.cli:main"
 
+[tool.setuptools.data-files]
+"share/memento-tattoo" = ["MEMENTO-PATTERN.md"]
+"share/memento-tattoo/templates" = ["templates/AGENTS.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

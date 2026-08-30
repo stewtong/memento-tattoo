@@ -1,7 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from memento_tattoo.tattoo_audit import audit_tattoos, tattoo_audit_report
+from memento_tattoo.tattoo_audit import audit_tattoos, parse_tattoos, tattoo_audit_report
 
 
 def _seed_session(root: Path, sess: str, when: str) -> None:
@@ -163,3 +163,18 @@ def test_report_buckets_mutually_exclusive(tmp_path: Path):
     )
     report = tattoo_audit_report(tmp_path)
     assert "2 due for review (1 past 30d window, 1 unknown provenance)" in report
+
+
+def test_public_parser_matches_audit_cleaned_text(tmp_path: Path):
+    body = (
+        "<!-- delta:sess_a.tattoo.11111111 agent=codex ts=2026-06-01T00:00:00Z -->\n"
+        "- Keep this lesson. reviewed:sess_review <!-- internal -->\n"
+        "- Markerless lesson.\n"
+    )
+    _seed_tattoos(tmp_path, body)
+
+    parsed = parse_tattoos((tmp_path / "tattoos.md").read_text(encoding="utf-8"))
+    audited = audit_tattoos(tmp_path, now=date(2026, 6, 20))
+
+    assert [tattoo.text for tattoo in parsed] == [candidate.text for candidate in audited]
+    assert [tattoo.text for tattoo in parsed] == ["Keep this lesson.", "Markerless lesson."]

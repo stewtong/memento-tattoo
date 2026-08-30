@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.export_public import export_public
+from scripts.export_public import PUBLIC_ENTRIES, export_public
 
 
 def test_public_export_contains_only_release_surface(tmp_path: Path):
@@ -9,7 +9,8 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     copied = export_public(export_root, source_root=Path.cwd())
 
     assert (export_root / "README.md").exists()
-    assert (export_root / "IDEA.md").exists()
+    assert (export_root / "MEMENTO-PATTERN.md").exists()
+    assert not (export_root / "IDEA.md").exists()
     assert (export_root / "pyproject.toml").exists()
     assert (export_root / "MANIFEST.in").exists()
     assert (export_root / ".github/workflows/ci.yml").exists()
@@ -43,6 +44,7 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert (export_root / "src/memento_tattoo/agent.py").exists()
     assert (export_root / "src/memento_tattoo/new_id.py").exists()
     assert (export_root / "src/memento_tattoo/session_store.py").exists()
+    assert (export_root / "src/memento_tattoo/session_archive.py").exists()
     assert (export_root / "src/memento_tattoo/registry.py").exists()
     assert (export_root / "src/memento_tattoo/rebuild.py").exists()
     assert (export_root / "src/memento_tattoo/save_commit.py").exists()
@@ -62,3 +64,20 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert not (export_root / "plans").exists()
     assert not (export_root / "research").exists()
     assert not (export_root / "specs").exists()
+
+
+def test_public_export_contract_uses_the_canonical_pattern_filename():
+    manifest = Path("MANIFEST.in").read_text(encoding="utf-8")
+
+    assert "MEMENTO-PATTERN.md" in PUBLIC_ENTRIES
+    assert "IDEA.md" not in PUBLIC_ENTRIES
+    assert "include MEMENTO-PATTERN.md" in manifest
+    assert "exclude IDEA.md" in manifest
+
+
+def test_packaging_declares_installed_contract_and_template_locations():
+    pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+
+    assert '[tool.setuptools.data-files]' in pyproject
+    assert '"share/memento-tattoo" = ["MEMENTO-PATTERN.md"]' in pyproject
+    assert '"share/memento-tattoo/templates" = ["templates/AGENTS.md"]' in pyproject

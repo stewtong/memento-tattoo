@@ -16,7 +16,7 @@ PUBLIC_ENTRIES = (
     "templates",
     ".gitignore",
     "README.md",
-    "IDEA.md",
+    "MEMENTO-PATTERN.md",
     "LICENSE",
     "pyproject.toml",
     "MANIFEST.in",

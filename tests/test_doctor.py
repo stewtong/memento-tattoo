@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from memento_tattoo.doctor import run_doctor
+from memento_tattoo.doctor import (
+    RECOMMENDED_ALIAS_COVERAGE_PERCENT,
+    RECOMMENDED_TATTOO_BYTES,
+    RECOMMENDED_TATTOO_COUNT,
+    RECOMMENDED_TATTOO_LENGTH,
+    run_doctor,
+)
 from memento_tattoo.retention import append_retention_event
 
 
@@ -18,6 +24,22 @@ def _seed_session(root: Path, sess: str, when: str) -> None:
 
 def _seed_tattoos(root: Path, body: str) -> None:
     (root / "tattoos.md").write_text("# Tattoos\n\n" + body, encoding="utf-8")
+
+
+def _note(note_id: str, aliases: str = "") -> str:
+    return (
+        f"<!-- delta:{note_id} -->\n"
+        "Situation: diagnostic coverage\n"
+        "Note: retain parsed evidence\n"
+        f"aliases: {aliases}\n"
+    )
+
+
+def _tattoos(*texts: str) -> str:
+    return "\n".join(
+        f"<!-- delta:sess_{index}.tattoo.{index:08d} -->\n- {text}\n"
+        for index, text in enumerate(texts, start=1)
+    )
 
 
 def test_doctor_warns_on_empty_root(tmp_path: Path):
@@ -237,3 +259,108 @@ def test_doctor_recall_probe_miss_fails(tmp_path: Path):
     assert ok is False
     assert "recall-probes" in output
     assert "not in top-1" in output
+
+
+def test_recommended_diagnostic_thresholds_are_named():
+    assert RECOMMENDED_ALIAS_COVERAGE_PERCENT == 60
+    assert RECOMMENDED_TATTOO_COUNT == 25
+    assert RECOMMENDED_TATTOO_BYTES == 7_168
+    assert RECOMMENDED_TATTOO_LENGTH == 300
+
+
+def test_doctor_reports_hot_and_archive_alias_coverage_separately(tmp_path: Path):
+    (tmp_path / "notes.md").write_text(_note("sess_hot.note.11111111", "hot trigger"), encoding="utf-8")
+    (tmp_path / "notes_archive.md").write_text(
+        "<!-- not-a-delta -->\nnot a parsed note record\n"
+        + _note("sess_cold1.note.22222222", "archive trigger")
+        + _note("sess_cold2.note.33333333"),
+        encoding="utf-8",
+    )
+    _seed_tattoos(tmp_path, "")
+
+    _, output = run_doctor(tmp_path)
+
+    assert "hot 1/1 aliased; archive 1/2 aliased" in output
+    assert "archive coverage below 60%" in output
+
+
+def test_alias_coverage_boundary_override_disable_and_empty_archive(tmp_path: Path):
+    (tmp_path / "notes.md").write_text(_note("sess_hot.note.11111111"), encoding="utf-8")
+    _seed_tattoos(tmp_path, "")
+
+    _, empty_output = run_doctor(tmp_path)
+    assert "archive 0/0 aliased" in empty_output
+    assert "archive coverage below" not in empty_output
+
+    (tmp_path / "notes_archive.md").write_text(
+        "".join(
+            _note(f"sess_{index}.note.{index:08d}", "trigger" if index <= 3 else "")
+            for index in range(1, 6)
+        ),
+        encoding="utf-8",
+    )
+    _, at_boundary = run_doctor(tmp_path)
+    _, overridden = run_doctor(tmp_path, alias_coverage_warn=61)
+    _, disabled = run_doctor(tmp_path, alias_coverage_warn=0)
+
+    assert "archive coverage below" not in at_boundary
+    assert "archive coverage below 61%" in overridden
+    assert "archive 3/5 aliased" in disabled
+    assert "archive coverage below" not in disabled
+
+
+def test_tattoo_count_boundary_override_and_disable(tmp_path: Path):
+    (tmp_path / "notes.md").write_text("", encoding="utf-8")
+    _seed_tattoos(tmp_path, _tattoos(*(["x"] * 3)))
+
+    _, at_boundary = run_doctor(tmp_path, tattoo_count_warn=3, tattoo_bytes_warn=0, tattoo_length_warn=0)
+    _, over = run_doctor(tmp_path, tattoo_count_warn=2, tattoo_bytes_warn=0, tattoo_length_warn=0)
+    _, disabled = run_doctor(tmp_path, tattoo_count_warn=0, tattoo_bytes_warn=0, tattoo_length_warn=0)
+
+    assert "3 tattoos" in at_boundary and "count over" not in at_boundary
+    assert "count over 2" in over
+    assert "3 tattoos" in disabled and "count over" not in disabled
+
+
+def test_tattoo_byte_boundary_override_disable_and_multibyte_measurement(tmp_path: Path):
+    (tmp_path / "notes.md").write_text("", encoding="utf-8")
+    _seed_tattoos(tmp_path, _tattoos("é"))
+
+    _, at_boundary = run_doctor(tmp_path, tattoo_count_warn=0, tattoo_bytes_warn=2, tattoo_length_warn=0)
+    _, over = run_doctor(tmp_path, tattoo_count_warn=0, tattoo_bytes_warn=1, tattoo_length_warn=0)
+    _, disabled = run_doctor(tmp_path, tattoo_count_warn=0, tattoo_bytes_warn=0, tattoo_length_warn=0)
+
+    assert "2 UTF-8 bytes" in at_boundary and "bytes over" not in at_boundary
+    assert "bytes over 1" in over
+    assert "2 UTF-8 bytes" in disabled and "bytes over" not in disabled
+
+
+def test_tattoo_length_boundary_override_disable_and_bounded_sample(tmp_path: Path):
+    (tmp_path / "notes.md").write_text("", encoding="utf-8")
+    _seed_tattoos(tmp_path, _tattoos("abc", "defg", "hijkl", "mnopqr", "stuvwxy"))
+
+    _, at_boundary = run_doctor(tmp_path, tattoo_count_warn=0, tattoo_bytes_warn=0, tattoo_length_warn=7)
+    _, over = run_doctor(tmp_path, tattoo_count_warn=0, tattoo_bytes_warn=0, tattoo_length_warn=3)
+    _, disabled = run_doctor(tmp_path, tattoo_count_warn=0, tattoo_bytes_warn=0, tattoo_length_warn=0)
+
+    assert "0 over 7 characters" in at_boundary and "length over" not in at_boundary
+    assert "4 over 3 characters" in over and over.count("ch:") == 3
+    assert "0 over 300 characters" in disabled and "length over" not in disabled
+
+
+def test_tattoo_pressure_warnings_coexist_without_mutation(tmp_path: Path):
+    (tmp_path / "notes.md").write_text("", encoding="utf-8")
+    _seed_tattoos(tmp_path, _tattoos("éééé", "another long tattoo"))
+    firing = tmp_path / "tattoo_firing.json"
+    firing.write_text('{"sess_1": 2}\n', encoding="utf-8")
+    tattoos_before = (tmp_path / "tattoos.md").read_bytes()
+    firing_before = firing.read_bytes()
+
+    _, output = run_doctor(tmp_path, tattoo_count_warn=1, tattoo_bytes_warn=7, tattoo_length_warn=3)
+
+    assert "count over 1" in output
+    assert "bytes over 7" in output
+    assert "length over 3" in output
+    assert "run tattoo-audit" in output
+    assert (tmp_path / "tattoos.md").read_bytes() == tattoos_before
+    assert firing.read_bytes() == firing_before

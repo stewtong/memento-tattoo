@@ -20,6 +20,13 @@ def build_generated_files(root: Path) -> dict[Path, str]:
 
 def rebuild(root: Path, *, check: bool = False) -> tuple[bool, str]:
     paths = paths_for(root)
+    with memory_lock(paths.root):
+        return _rebuild_locked(paths.root, check=check)
+
+
+def _rebuild_locked(root: Path, *, check: bool = False) -> tuple[bool, str]:
+    """Rebuild indexes while the caller holds the root memory lock."""
+    paths = paths_for(root)
     generated = build_generated_files(paths.root)
     changed = [path for path, text in generated.items() if not path.exists() or path.read_text(encoding="utf-8") != text]
     if check:
@@ -28,9 +35,8 @@ def rebuild(root: Path, *, check: bool = False) -> tuple[bool, str]:
             return False, f"session indexes stale; would change: {rel}"
         return True, "session indexes current"
 
-    with memory_lock(paths.root):
-        for path, text in generated.items():
-            _atomic_write(path, text)
+    for path, text in generated.items():
+        _atomic_write(path, text)
     return True, f"rebuilt session indexes: {len(generated)} files"
 
 

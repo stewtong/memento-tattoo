@@ -1,3 +1,5 @@
+<!-- register: public reference documentation | reader: coding-agent implementers | consumed: task lookup -->
+
 # Concepts
 
 `memento-tattoo` separates memory into layers so an agent can keep lightweight working lessons without pretending every note is permanent.
@@ -26,10 +28,12 @@ memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [
 Maintenance:
 
 ```text
-memento-tattoo --root <path> doctor [--project <project_dir>]...
+memento-tattoo --root <path> doctor [--project <project_dir>]... [--alias-coverage-warn PERCENT] [--tattoo-count-warn N] [--tattoo-bytes-warn N] [--tattoo-length-warn N]
 memento-tattoo --root <path> garden [--today YYYY-MM-DD] [--promote-threshold N] [--limit N]
 memento-tattoo --root <path> rebuild [--check]
 memento-tattoo --root <path> queue-maintenance [--days N] [--max-hot N] [--apply]
+memento-tattoo --root <path> session-list [--limit N] [--hot-only|--archive-only]
+memento-tattoo --root <path> session-archive --days N [--limit N] [--apply]
 ```
 
 Advanced local coordination:
@@ -106,6 +110,8 @@ If this had been loaded at the beginning of the session, would it have dramatica
 
 Promote only when the lesson is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule. Tattoo promotion still requires explicit user approval before running `tattoo-add`.
 
+At session end, the agent manually proposes the strongest candidate and its reason for clearing the bar. The CLI neither proposes nor parks candidates. Explicit approval promotes the proposed wording. Rejection leaves any useful lesson as an ordinary note. No action parks the candidate in a durable non-tattoo surface, such as a session marker or tagged note, for later review. Silence is never approval.
+
 For the full five-gate promotion standard, including merge-first and the provenance rule, see [authoring-standards.md](authoring-standards.md).
 
 ## Tattoo Audit
@@ -120,6 +126,10 @@ The command produces no writes. Acting on its output requires explicit agent jud
 
 Sessions are small Markdown save records in `memento/sessions/`. Agents should reserve a session id with `new-id` instead of inventing one by hand, then write one `session-add` record for the work they completed.
 
+`session-list` reads hot and archived session records, newest first, and prints stable tab-separated fields for ID, date, agent, significance, topics, and location. Use `--hot-only` or `--archive-only` to narrow the result.
+
+`session-archive --days N` selects hot records strictly older than the parsed-date cutoff. It previews exact source and destination paths by default. `--apply` moves a prevalidated batch, limited to 100 records unless `--limit` changes it. The CLI validates every source, destination, and duplicate ID before its first move, then rebuilds the indexes. The command preserves session content and IDs; archived sessions remain in lookup, rebuild, and collision checks. The caller chooses `N`; the package does not impose a retention period.
+
 Generated indexes live at:
 
 ```text
@@ -128,6 +138,12 @@ memento/sessions/index-recent.md
 ```
 
 Run `rebuild` to refresh them or `rebuild --check` to detect drift.
+
+## Doctor recommendations
+
+`doctor` reports hot and archived note alias coverage separately as `aliased/total`. The default archived-note recommendation is 60 percent. It also reports tattoo count, aggregate UTF-8 bytes, and tattoos longer than the configured length. Its recommended starting values are 25 tattoos, 7,168 bytes, and 300 characters per tattoo.
+
+These values are review triggers, not validity requirements or quotas. Each warning accepts an override, and `0` disables that warning while preserving the measurement. Low archive coverage asks for alias review; it never causes aliases to be generated. Tattoo pressure starts a keep, demote, merge, or cut review; it never removes a lesson automatically.
 
 ## Registry Queue
 
@@ -144,7 +160,7 @@ Run `rebuild` to refresh them or `rebuild --check` to detect drift.
 
 ## Save Commit
 
-`save-commit --spec <json>` is a convenience driver for agents that want to update several surfaces in one checked sequence. It validates the spec before writing, then calls the same lower-level commands for sessions, notes, tattoos, project memory, registry queue/drain, and rebuild.
+`save-commit --spec <json>` is the preferred driver when one session updates several surfaces. It validates the complete spec before writing, then calls the same lower-level commands for sessions, notes, tattoos, project memory, registry queue/drain, and rebuild.
 
 It is not a transaction. If a later verification fails, earlier durable writes remain in place and are reported in the result.
 
@@ -187,7 +203,9 @@ This keeps the CLI mechanical while letting the agent remain the judge.
 
 ## Retention Log
 
-`retention_log.jsonl` is append-only. Each checked note write records:
+The retention history is logically append-only across `retention_log.jsonl` and `retention_log_archive.jsonl`. Each checked note write appends to the hot log. When the hot file exceeds its byte target, complete older events move to the archive and readers combine both files.
+
+Each checked note write records:
 
 - timestamp
 - session id

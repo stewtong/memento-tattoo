@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 
 from memento_tattoo.cli import main
+import pytest
 
 
 def test_cli_note_add_and_garden(tmp_path: Path, capsys):
@@ -134,6 +135,26 @@ def test_cli_new_id_session_add_and_rebuild(tmp_path: Path, capsys):
     assert sid in (tmp_path / "sessions" / "index.md").read_text(encoding="utf-8")
 
 
+def test_cli_session_add_rejects_malformed_date_before_write(tmp_path: Path, capsys):
+    code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "session-add",
+            "--sess",
+            "sess_bad",
+            "--date",
+            "last Tuesday",
+            "--accomplished",
+            "none.",
+        ]
+    )
+
+    assert code == 2
+    assert "invalid session date" in capsys.readouterr().out
+    assert not (tmp_path / "sessions").exists()
+
+
 def test_cli_registry_queue_and_drain(tmp_path: Path, capsys):
     code = main(
         [
@@ -199,6 +220,188 @@ def test_cli_doctor_reports_missing_files(tmp_path: Path, capsys):
 
     assert code == 1
     assert "notes.md missing" in capsys.readouterr().out
+
+
+def test_cli_doctor_wires_threshold_flags(tmp_path: Path, capsys, monkeypatch):
+    import memento_tattoo.cli as cli
+
+    captured = {}
+
+    def fake_run_doctor(root, **kwargs):
+        captured.update(kwargs)
+        return True, "ok"
+
+    monkeypatch.setattr(cli, "run_doctor", fake_run_doctor)
+    code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "doctor",
+            "--alias-coverage-warn",
+            "55",
+            "--tattoo-count-warn",
+            "20",
+            "--tattoo-bytes-warn",
+            "6000",
+            "--tattoo-length-warn",
+            "250",
+        ]
+    )
+
+    assert code == 0
+    assert captured == {
+        "projects": [],
+        "alias_coverage_warn": 55,
+        "tattoo_count_warn": 20,
+        "tattoo_bytes_warn": 6000,
+        "tattoo_length_warn": 250,
+    }
+    assert capsys.readouterr().out.strip() == "ok"
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "+inf", "-inf"])
+def test_cli_doctor_rejects_nonfinite_alias_threshold(tmp_path: Path, value: str):
+    with pytest.raises(SystemExit) as exc:
+        main(["--root", str(tmp_path), "doctor", "--alias-coverage-warn", value])
+
+    assert exc.value.code == 2
+
+
+def test_cli_doctor_preserves_zero_alias_threshold(tmp_path: Path, capsys, monkeypatch):
+    import memento_tattoo.cli as cli
+
+    captured = {}
+
+    def fake_run_doctor(root, **kwargs):
+        captured.update(kwargs)
+        return True, "ok"
+
+    monkeypatch.setattr(cli, "run_doctor", fake_run_doctor)
+
+    assert main(["--root", str(tmp_path), "doctor", "--alias-coverage-warn", "0"]) == 0
+    assert captured["alias_coverage_warn"] == 0.0
+    assert capsys.readouterr().out.strip() == "ok"
+
+
+def _cli_session(path: Path, sess: str, session_date: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        f"[{sess} | {session_date} | codex | cli, tests | medium]\n"
+        "Accomplished: tested.\nStarted: none.\nPending: none.\nInsights: none.\nFiles: none.\n---\n",
+        encoding="utf-8",
+    )
+
+
+def test_cli_session_list_defaults_to_both_newest_first_and_filters(tmp_path: Path, capsys):
+    _cli_session(tmp_path / "sessions" / "sess_hot.md", "sess_hot", "2026-06-20 10:00")
+    _cli_session(tmp_path / "sessions" / "archive" / "sess_arc.md", "sess_arc", "2026-06-21 10:00")
+
+    assert main(["--root", str(tmp_path), "session-list"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[2].endswith("\tarchive")
+    assert lines[3].endswith("\thot")
+    assert lines[2].startswith("sess_arc\t")
+
+    assert main(["--root", str(tmp_path), "session-list", "--hot-only", "--limit", "0"]) == 0
+    hot_output = capsys.readouterr().out
+    assert "sess_hot" in hot_output
+    assert "sess_arc" not in hot_output
+
+
+def test_cli_session_list_ties_sort_by_session_id_descending(tmp_path: Path, capsys):
+    _cli_session(tmp_path / "sessions" / "sess_a.md", "sess_a", "2026-06-20 10:00")
+    _cli_session(tmp_path / "sessions" / "sess_b.md", "sess_b", "2026-06-20 10:00")
+
+    assert main(["--root", str(tmp_path), "session-list"]) == 0
+    rows = capsys.readouterr().out.splitlines()[2:]
+    assert [row.split("\t")[0] for row in rows] == ["sess_b", "sess_a"]
+
+
+def test_cli_session_list_sorts_by_parsed_instant_not_date_text(tmp_path: Path, capsys):
+    _cli_session(tmp_path / "sessions" / "sess_utc.md", "sess_utc", "2026-06-20 12:00+00:00")
+    _cli_session(tmp_path / "sessions" / "sess_offset.md", "sess_offset", "2026-06-20 09:00-05:00")
+
+    assert main(["--root", str(tmp_path), "session-list"]) == 0
+    rows = capsys.readouterr().out.splitlines()[2:]
+    assert [row.split("\t")[0] for row in rows] == ["sess_offset", "sess_utc"]
+
+
+def test_cli_session_list_parse_failure_is_nonzero(tmp_path: Path, capsys):
+    bad = tmp_path / "sessions" / "sess_bad.md"
+    bad.parent.mkdir()
+    bad.write_text("damaged", encoding="utf-8")
+
+    assert main(["--root", str(tmp_path), "session-list"]) == 1
+    assert "missing session header" in capsys.readouterr().out
+
+
+def test_cli_session_list_malformed_stored_date_is_nonzero(tmp_path: Path, capsys):
+    bad = tmp_path / "sessions" / "sess_bad.md"
+    bad.parent.mkdir()
+    bad.write_text(
+        "[sess_bad | not-a-date | codex | tests | low]\nAccomplished: none.\n",
+        encoding="utf-8",
+    )
+
+    assert main(["--root", str(tmp_path), "session-list"]) == 1
+    output = capsys.readouterr().out
+    assert "invalid session date in" in output
+    assert "sess_bad.md" in output
+
+
+def test_cli_session_list_filters_are_mutually_exclusive(tmp_path: Path):
+    with pytest.raises(SystemExit) as exc:
+        main(["--root", str(tmp_path), "session-list", "--hot-only", "--archive-only"])
+    assert exc.value.code == 2
+
+
+def test_cli_session_archive_dry_run_then_apply_and_repeat(tmp_path: Path, capsys, monkeypatch):
+    import memento_tattoo.session_archive as session_archive
+
+    monkeypatch.setattr(session_archive, "date", _FixedDate)
+    source = tmp_path / "sessions" / "sess_old.md"
+    _cli_session(source, "sess_old", "2026-06-01 10:00")
+    original = source.read_bytes()
+
+    assert main(["--root", str(tmp_path), "session-archive", "--days", "10"]) == 0
+    dry_output = capsys.readouterr().out
+    assert "DRY_RUN 1 candidate(s)" in dry_output
+    assert "sessions/sess_old.md -> sessions/archive/sess_old.md" in dry_output
+    assert source.read_bytes() == original
+    assert not (tmp_path / "sessions" / "archive").exists()
+
+    assert main(["--root", str(tmp_path), "session-archive", "--days", "10", "--apply"]) == 0
+    apply_output = capsys.readouterr().out
+    assert "APPLY 1 candidate(s)" in apply_output
+    assert "archived 1 session(s)" in apply_output
+
+    before = {str(path.relative_to(tmp_path)): path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    assert main(["--root", str(tmp_path), "session-archive", "--days", "10", "--apply"]) == 0
+    assert "archived 0 session(s)" in capsys.readouterr().out
+    after = {str(path.relative_to(tmp_path)): path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    assert after == before
+
+
+from datetime import date as _Date
+
+
+class _FixedDate(_Date):
+    @classmethod
+    def today(cls):
+        from datetime import date
+
+        return date(2026, 6, 30)
+
+
+def test_cli_session_archive_requires_days_and_rejects_negative_values(tmp_path: Path):
+    with pytest.raises(SystemExit) as missing:
+        main(["--root", str(tmp_path), "session-archive"])
+    assert missing.value.code == 2
+
+    with pytest.raises(SystemExit) as negative:
+        main(["--root", str(tmp_path), "session-archive", "--days", "-1"])
+    assert negative.value.code == 2
 
 
 def test_cli_load_query_returns_ranked_note(tmp_path: Path, capsys):

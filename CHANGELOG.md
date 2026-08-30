@@ -1,6 +1,13 @@
+<!-- register: public release history | reader: users and contributors | consumed: version lookup -->
+
 # Changelog
 
 ## Unreleased
+
+- Adds session inspection and caller-controlled, dry-run-first archival. Archived sessions remain readable and retain their IDs and content.
+- Adds doctor recommendations for separate hot and archived alias coverage, tattoo count, aggregate UTF-8 bytes, and tattoo length. Recommendations are configurable review triggers and never modify lessons.
+- Establishes `MEMENTO-PATTERN.md` as the canonical standalone contract for plain-file adaptation and the reference CLI, including explicit approval and no-action parking for tattoo candidates.
+- Clarifies the public file layout, retention-log rotation, multi-surface save path, tattoo approval boundary, and local HTML demo instructions.
 
 ## 0.3.1 - 2026-08-28
 
