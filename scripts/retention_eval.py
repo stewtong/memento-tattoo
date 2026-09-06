@@ -54,7 +54,7 @@ class EvalReport:
 
 
 def _is_cover_detection(result: EvalResult) -> bool:
-    return result.has_cover and result.suggested_decision == "existing-missed"
+    return result.has_cover and result.suggested_decision == "related"
 
 
 CASES = (

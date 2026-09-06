@@ -19,7 +19,7 @@ Plain Markdown is enough to try the correction-retention pattern. Use the CLI wh
 Core loop:
 
 ```text
-memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed|pattern] [--decision new|existing-missed] [--covered-note-id <note_id>] <text>
+memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflection|seed|pattern] [--decision new|related|existing-missed|applied|overapplied] [--covered-note-id <note_id>] <text>
 memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
 memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] [--append|--replace] <text>
 memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
@@ -108,7 +108,7 @@ Unlike project `memory.md` and `notes.md`, tattoos are intended to be loaded at 
 If this had been loaded at the beginning of the session, would it have dramatically improved the course of action?
 ```
 
-Promote only when the lesson is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule. Tattoo promotion still requires explicit user approval before running `tattoo-add`.
+Promote only when the lesson has recurred and is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule. Tattoo promotion still requires explicit user approval before running `tattoo-add`.
 
 At session end, the agent manually proposes the strongest candidate and its reason for clearing the bar. The CLI neither proposes nor parks candidates. Explicit approval promotes the proposed wording. Rejection leaves any useful lesson as an ordinary note. No action parks the candidate in a durable non-tattoo surface, such as a session marker or tagged note, for later review. Silence is never approval.
 
@@ -118,7 +118,7 @@ For the full five-gate promotion standard, including merge-first and the provena
 
 `tattoo-audit` is a read-only maintenance command that flags promoted tattoos due for a keep, demote, or cut review. It is an age gate: a tattoo is flagged once it has gone longer than the review window (30 days by default) since it was promoted or since its last recorded review. The reference date comes from the tattoo's provenance marker, with a `reviewed:` watermark resetting the clock when a reviewer leaves one. A tattoo with no resolvable date, or a watermark that points at a session the audit cannot find, is also flagged so it gets a first look.
 
-Recurrence scoring is deliberately excluded from the review gate. The report displays citation telemetry from `tattoo_firing.json` and durable `[[tattoo_id]]` references in notes and sessions, but those counts do not decide whether a tattoo is due for review or whether it should be kept. Conceptual coverage remains a Tier-2 judgment.
+Recurrence scoring is deliberately excluded from the review gate. The report displays citation telemetry from `tattoo_firing.json` and durable `[[tattoo_id]]` references in notes and sessions, but those counts do not decide whether a tattoo is due for review or whether it should be kept. Conceptual coverage remains an agent judgment.
 
 The command produces no writes. Acting on its output requires explicit agent judgment and the same user-approval gate that governs initial promotion.
 
@@ -154,13 +154,13 @@ These values are review triggers, not validity requirements or quotas. Each warn
 - Memento OSS - memento-oss/ - active
 ```
 
-`drain` applies queued deltas under the root lock. Same-slug collisions are deterministic: the newest delta wins, loser files move to `_queue/conflicts/`, and the winner gets a `registry-conflict` comment.
+`drain` validates every existing registry entry before rewriting the registry; malformed entries, duplicate slugs, or unrecognized content fail without consuming the queue. It applies queued deltas under the root lock. Same-slug collisions are deterministic: the newest delta wins, loser files move to `_queue/conflicts/`, and the winner gets a `registry-conflict` comment.
 
 `queue-maintenance` previews conflicts older than 30 days or beyond the newest 200 by default. Add `--apply` to move those files into `_queue/conflicts/archive/`; no conflict artifact is deleted.
 
 ## Save Commit
 
-`save-commit --spec <json>` is the preferred driver when one session updates several surfaces. It validates the complete spec before writing, then calls the same lower-level commands for sessions, notes, tattoos, project memory, registry queue/drain, and rebuild.
+`save-commit --spec <json>` is the preferred driver when one session updates several surfaces. It validates the submitted schema before writing, then calls the same lower-level commands for sessions, notes, tattoos, project memory, registry queue/drain, and rebuild.
 
 It is not a transaction. If a later verification fails, earlier durable writes remain in place and are reported in the result.
 
@@ -179,13 +179,13 @@ Retention judgment fields:
 }
 ```
 
-Use `retention.decision` when the agent has better context than the retrieval classifier. Use `covered_note_id` to attach a repeat miss or repair to the lesson that should have fired, rather than only to the newly written note.
+Use these fields only with correction or reflection notes. Seed and pattern notes do not log retention events and reject explicit retention judgments. Use `retention.decision` when the agent has better context than the retrieval classifier. Use `covered_note_id` to attach a repeat miss or repair to the lesson that should have fired, rather than only to the newly written note.
 
 ## Checked Retrieval
 
-When adding a `correction` or `reflection` note, the package first ranks existing notes for the new situation. It then records whether the system found a strong existing cover or whether the situation appears new.
+When adding a `correction` or `reflection` note, the package first ranks existing notes for the new situation. It records `related` for a possible covering lesson or `new` when the classifier finds none.
 
-This makes repeated correction visible. If the same lesson was already present but did not fire, the retrieval trigger may need repair.
+These matches identify candidates for review. An author must inspect the task evidence to record a missed lesson or useful application. An observed miss can justify repairing the retrieval trigger.
 
 By default, `note-add` records the CLI's suggested decision. Agents can override that decision:
 
@@ -205,7 +205,11 @@ This keeps the CLI mechanical while letting the agent remain the judge.
 
 The retention history is logically append-only across `retention_log.jsonl` and `retention_log_archive.jsonl`. Each checked note write appends to the hot log. When the hot file exceeds its byte target, complete older events move to the archive and readers combine both files.
 
+Rotation atomically replaces each file, archiving before trimming the hot log. New events carry unique `event_id` values; legacy hot events receive distinct IDs before a new rotation copies them. Readers ignore matching event IDs at the archive boundary, and a later note retry or rotation removes those copies. Separate identical observations remain distinct. Identical legacy events already split across stores have no such proof: readers preserve them and warn that source evidence is needed to reconcile the ambiguity. There is no history-wide deduplication.
+
 Each checked note write records:
+
+- unique event id
 
 - timestamp
 - session id
@@ -213,13 +217,16 @@ Each checked note write records:
 - situation
 - written note id
 - ranked candidates
-- final decision (`new` or `existing-missed`)
+- decision and its source (`author` or `classifier`)
 - optional covered note id
 
 The shipped decisions are:
 
 - `new`: no dominant existing lesson covered the situation.
-- `existing-missed`: a likely lesson existed but did not prevent the correction.
+- `related`: automatic retrieval found a possible covering lesson.
+- `existing-missed`: the author recorded a missed lesson.
+- `applied`: the author recorded useful application.
+- `overapplied`: the author recorded harmful or unnecessary application.
 
 Older logs may contain `existing-repaired` or `false-positive`; readers tolerate those legacy values, but current writes do not produce them.
 
@@ -228,8 +235,8 @@ Older logs may contain `existing-repaired` or `false-positive`; readers tolerate
 The read-only gardener reports:
 
 - notes past their `review_after` date
-- lessons with repeated missed retrievals
-- promotion candidates based on recurrence count
+- author-recorded missed lessons for review
+- promotion candidates based on author-recorded recurrence
 - a placeholder section for future merge suggestions
 
 ## Retention Health
@@ -240,4 +247,22 @@ Retention health is:
 existing-missed / (new + existing-missed)
 ```
 
-It is a note-write classification signal, not a benchmark or a measure of prevention. The log does not contain retrieval-exposure, application/followed, or opportunity events, so application rate and recurrence-against-opportunities are not measured. The old `repeat_correction_rate` function name remains as a compatibility alias.
+It is a note-write classification signal, not a benchmark or a measure of prevention. Optional author observations can record useful application or overapplication. The log has no comprehensive retrieval-exposure or opportunity denominator, so application rate and recurrence against opportunities remain unmeasured. The old `repeat_correction_rate` function name remains as a compatibility alias.
+
+## Interpret evidence within its scope
+
+Automatic classification records `new` or `related`. Author judgments record their source separately. Historical events without that provenance remain unverified classifications; gardening retains their count but excludes them from observed-miss promotion counts. Citation counts establish mentions. Behavioral effectiveness requires evidence from the task. Sparse citations alone do not justify removing a rare, consequential safeguard.
+
+Use the named project's current state together with transferable lessons matching the action. Expand the search when evidence conflicts, a needed source is absent, or a consequential decision needs more support. A bounded result cannot establish absence. A newer summary does not supersede an authoritative decision merely by being newer. Preserve useful successful approaches as well as corrections.
+
+A tattoo states when its action helps and preserves necessary exceptions. Its wording must not turn a local correction into a universal restriction. Review scope, overlap, and the cost of unnecessary application before proposing it. Existing approval and candidate-parking rules still apply.
+
+## Retry saves without restoring old state
+
+Identical registry operations reuse their original receipts and timestamps. Applied receipts retain a bounded hot window; older receipts move to `_queue/applied/archive/`. Preserve those files for replay checks. If an existing session lacks a matching receipt, review current state and use a new session ID. A superseded save returns failure instead of reapplying its older registry line.
+
+Note rotation writes the archive before removing hot content. A retry reconciles overlap and checks both stores for existing note IDs. Each surface is verified separately; the complete save is not an all-or-nothing transaction. A failure may leave earlier verified steps in place. Rebuild writes only changed indexes.
+
+A save whose completed registry operation has been superseded fails before writing project snapshots. This check does not serialize a whole save against concurrent writers. Use expected-line guards for registry drafts and reconcile concurrent project edits. Replaying a session already moved to the session archive is rejected by the session collision check; review current state and reserve a new session ID for further work.
+
+If a note was persisted but its retention event failed, retrying the note repairs the missing event. Automatic classification is evaluated again at retry time with that note excluded from candidates; it does not reconstruct the earlier task. Existing events retain their original judgment and provenance.

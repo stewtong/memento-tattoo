@@ -4,6 +4,28 @@
 
 ## Unreleased
 
+- Recovers interrupted retention rotation without counting copied events twice; gives new events distinct identities.
+- Verifies registry save ownership, applied receipt, status, and exact line; rejects malformed existing registry content before rewriting.
+- Verifies replayed notes in their actual archive location and rejects unsupported retention judgments on pattern notes.
+- Aligns plain-file adoption, promotion gates, alias guidance, and replay claims with the public contract.
+
+- Includes Markdown test fixtures in source distributions so the packaged test suite can run independently.
+- Rejects existing export destinations and source symlinks before copying public files.
+- Rejects superseded registry saves before project snapshot writes and reports malformed save options without raising type errors.
+- Recovers missing retention events on note retry, excludes the note itself from cover detection, and reads drain indexes under the memory lock.
+- Adds optional expected-line checks to prevent stale registry drafts from overwriting newer state; preflight and drain both validate the source.
+- Includes explicit current project state alongside action-matched lessons and removes duplicate index generation from saves.
+
+- Preserves registry replay receipts through archival and prevents old saves from restoring superseded state. Ambiguous historical replay fails with a recovery instruction.
+- Preserves note content before rotation removes hot blocks, reconciles interrupted writes, and deduplicates replay across both note stores.
+- Applies registry archive operations by action and slug, normalizes recent-session ordering across offsets, and avoids rewriting unchanged indexes.
+- Records automatic similarity as `related`; separates author-recorded misses, useful application, and overapplication. Historical classifications remain readable without being treated as observed recurrence.
+- Clarifies conditional tattoo guidance and preserves the qualifications needed to avoid overapplication.
+
+## Source update - 2026-08-30
+
+Published to the source repository with package version 0.3.1.
+
 - Adds session inspection and caller-controlled, dry-run-first archival. Archived sessions remain readable and retain their IDs and content.
 - Adds doctor recommendations for separate hot and archived alias coverage, tattoo count, aggregate UTF-8 bytes, and tattoo length. Recommendations are configurable review triggers and never modify lessons.
 - Establishes `MEMENTO-PATTERN.md` as the canonical standalone contract for plain-file adaptation and the reference CLI, including explicit approval and no-action parking for tattoo candidates.

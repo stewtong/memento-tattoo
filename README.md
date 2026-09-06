@@ -2,7 +2,7 @@
 
 # memento-tattoo
 
-`memento-tattoo` is a user-owned memory policy for an AI operating system for work. The reference implementation is a correction-retention loop that helps coding agents stop repeating corrected mistakes across sessions.
+`memento-tattoo` stores corrected lessons and current project state in plain files for coding agents to retrieve across sessions. The user controls what becomes an always-loaded rule.
 
 The loop is deliberately small:
 
@@ -28,31 +28,29 @@ In *Memento*, Leonard uses a tiered memory system: notes for quick observations,
 - project `memory.md` files are the Polaroids beside the work
 - tattoos are scarce promoted lessons that should be loaded before broad classes of action
 
-Generic memory stores context. `memento-tattoo` stores corrections that should alter future behavior.
-
 ## What it solves
 
-Most agent memory systems start by asking how much context can be recalled. `memento-tattoo` asks a narrower question: what correction would change the agent's next action?
+`memento-tattoo` helps an agent preserve a correction, retrieve it for a later task, and decide whether it should change the next action.
 
 That makes memory a lightweight learning loop. The model weights do not change; the working system does. Corrections become notes, repeated lessons can become tattoos, and a retention log checks whether a covering lesson was detected at the write-time checkpoint.
 
 ## What you get
 
 - **A promotion gate with a lifecycle.** Corrections become rules, rules can become scarce tattoos, and `tattoo-audit` flags promoted lessons for keep, demote, or cut review.
-- **Situation-recognition recall.** Lessons are ranked for the current task, so a correction resurfaces the moment the situation has a name again.
-- **Checked retrieval with a retention log.** When a correction or reflection is written, the system records whether a covering lesson was detected at that write-time checkpoint. This loop is the core differentiator.
+- **Situation-recognition recall.** The `load` command ranks lessons against the situation named in a query, across hot and archived notes.
+- **Checked retrieval with a retention log.** When a correction or reflection is written, the system records whether a covering lesson was detected at that write-time checkpoint. Authors can separately record whether a lesson was missed or applied.
 - **Plain-text memory you can inspect, repair, and delete.** Notes, project memory, and tattoos are Markdown files. No database, no service dependency.
 - **Optional local coordination for parallel agents.** Advisory locks, reserved session IDs, and a queued registry drain for concurrent local sessions.
 
 ## What the retention signal proves
 
-The operational retention-health signal is the share of shipped note-write decisions recorded as `existing-missed`. Re-run the deterministic baseline with `.venv/bin/python scripts/retention_eval.py`:
+The historical retention-health signal compares the recorded `existing-missed` and `new` classifications. Automatic retrieval now records `related` for a possible covering lesson; authors can explicitly record `existing-missed`, `applied`, or `overapplied`. Re-run the deterministic baseline with `.venv/bin/python scripts/retention_eval.py`:
 
 ```text
 existing-missed / (new + existing-missed)
 ```
 
-It measures note-write classification hygiene. It does not measure behavioral repeat reduction, retrieval exposure, whether an agent applied a lesson, or recurrence against opportunities; the event log has no events or denominators for those claims. The deterministic cover-detection evaluation reports a baseline of 3/3 true covers flagged (1.00 coverage) and 0/3 negative queries flagged (0.00 false-positive rate). Those figures measure cover detection, not behavioral repeat reduction.
+It measures note-write classification hygiene. It does not measure behavioral repeat reduction, retrieval exposure, whether an agent applied a lesson, or recurrence against opportunities; optional author observations do not supply comprehensive exposure or opportunity denominators. The deterministic cover-detection evaluation reports a baseline of 3/3 true covers flagged (1.00 coverage) and 0/3 negative queries flagged (0.00 false-positive rate). Those figures measure cover detection, not behavioral repeat reduction.
 
 ## Install from a checkout
 
@@ -106,7 +104,8 @@ EOF
 
 .venv/bin/memento-tattoo --root .tmp/demo-memento note-add --sess sess_demo --kind seed "$note_text"
 
-# If the user approves the promoted rule:
+# Only after observed recurrence, all promotion gates,
+# and explicit user approval of this wording:
 .venv/bin/memento-tattoo --root .tmp/demo-memento tattoo-add --sess sess_demo "Before claiming work is complete, run the command that proves it and read the output."
 .venv/bin/memento-tattoo --root .tmp/demo-memento doctor --project .tmp/demo-project
 .venv/bin/memento-tattoo --root .tmp/demo-memento load --project .tmp/demo-project --query "claiming complete verification"
@@ -128,7 +127,7 @@ At the end of a session, or when the user says something like "save work", the a
 What from this session should change a future action?
 ```
 
-A tattoo is not a good tip, a summary, or a project fact. It is a scarce operating lesson meant to be visible before broad classes of future action. Propose one only when, had it been loaded at the start of the session, it would have dramatically improved the course of action, and the lesson is durable across unrelated sessions, behavioral rather than informational, broader than the file that produced it, and short enough to load often. Promotion requires explicit user approval before running `tattoo-add`.
+A tattoo is not a good tip, a summary, or a project fact. It is a scarce operating lesson meant to be visible before broad classes of future action. Propose one only when, had it been loaded at the start of the session, it would have dramatically improved the course of action, and the lesson has recurred, is durable across unrelated sessions, changes future behavior, reaches beyond the file that produced it, and fits a declarative principle or compact rule. Promotion requires explicit user approval before running `tattoo-add`.
 
 At session end, the agent manually proposes the strongest candidate and its reason for clearing the bar. The CLI neither proposes nor parks candidates. Explicit approval promotes the proposed wording. Rejection leaves any useful lesson as an ordinary note. No action parks the candidate in a durable non-tattoo surface, such as a session marker or tagged note, for later review. Silence is never approval.
 
@@ -153,6 +152,10 @@ Common mappings:
 ```
 
 If your agent runner supports hooks, hooks can call the same CLI commands: session start (`load`), long-running checkpoints (`session-add` or `project-edit`), post-commit summaries (`project-edit`), session end (the save-work judgment pass), and periodic maintenance (`garden` and `doctor`). Hooks should not blindly promote tattoos; promotion still needs agent judgment and explicit user approval.
+
+### Current project context and guarded updates
+
+Use `memento-tattoo load --query "<situation and action>" --project <directory>` to combine a project's explicit current-state section with relevant lessons. Historical notes remain searchable and superseded entries remain labelled. For a registry edit, copy the inspected line into `registry_delta.expected_line` in the save JSON. The driver rejects a stale draft before writing the session; drain rechecks for intervening changes. An empty expected line means the entry must be absent. See [the pattern contract](MEMENTO-PATTERN.md#retrieve-for-the-action-and-save-the-actual-changes) for scope and compatibility.
 
 ## Failure loop example
 
@@ -239,6 +242,7 @@ memento/
     archive/
   _queue/
     applied/
+      archive/
     conflicts/
       archive/
   .memento.lock
@@ -254,7 +258,7 @@ memento/
 - `memento/tattoo_firing.json`: supplemental local citation counter used by tattoo review. Durable note and session citations remain authoritative when this cache is stale or missing.
 - `memento/registry.md`: optional compact index of project summaries.
 - `memento/sessions/`: per-session save records and generated indexes; `archive/` holds rotated-out session files (still counted for ID-collision safety).
-- `memento/_queue/`: durable registry deltas waiting for drain, applied-delta audit files, and conflict artifacts. Old or excess conflicts move to `conflicts/archive/` without deletion.
+- `memento/_queue/`: durable registry deltas waiting for drain, applied-delta receipts, and conflict artifacts. Older receipts move to `applied/archive/` for replay checks. Old or excess conflicts move to `conflicts/archive/` without deletion.
 - `memento/.memento.lock`: advisory lock for short write operations.
 - `memento/.reserved_ids`: short-lived session-ID reservations so parallel agents do not collide before a session file is written.
 
@@ -289,7 +293,7 @@ Apache-2.0.
 The repo ships to GitHub through an export script that produces a clean public tree:
 
 ```bash
-.venv/bin/python scripts/export_public.py .tmp/public-export
+.venv/bin/python scripts/export_public.py ../memento-public-export
 ```
 
-Publish from the exported tree.
+Choose a new destination outside the source tree. The exporter rejects existing destinations and source symlinks. Verify the export and built package in an isolated environment before publishing. The package version remains 0.3.1; the Unreleased changelog records changes since the August 30 source update.

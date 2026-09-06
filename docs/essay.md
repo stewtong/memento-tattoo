@@ -1,15 +1,13 @@
 # Why memento-tattoo Exists
 
-Most agent memory remembers events: what happened, what got said, which files changed. That is useful, but it is not the failure mode that kept bothering me.
+I kept re-teaching the same lesson. An agent could retain what happened in a session and still miss the rule that should have changed its next action.
 
-The failure mode was re-teaching the same lesson. The agent could have context and still miss the durable rule that should have changed its next action.
+`memento-tattoo` stores lessons for later retrieval alongside project state. Its model comes from the film: notes for quick observations, project context beside the work it explains, and tattoos for the few rules that should be visible before acting.
 
-`memento-tattoo` is built around recall of lessons instead of recall of events.
+When a correction or reflection is saved, the reference CLI searches for possible covering lessons and records `new` or `related`. An author can separately record evidence that a lesson was missed, applied usefully, or applied unnecessarily. Similarity alone does not establish any of those outcomes.
 
-The model is the film: notes for fast captures, project context for the annotated middle layer, and tattoos for the facts that should be visible before acting. The software version adds one thing the film does not have: a retention loop. When a correction happens, the system checks whether an existing lesson should have fired. If the same lesson recurs, that recurrence becomes evidence.
+Markdown notes and a JSONL log are easy to inspect, edit, diff, and copy. There is no database to migrate, no service to keep alive, and no embedding index to interpret before a human can read what the agent saved.
 
-The storage is intentionally plain text. Markdown notes and a JSONL log are easy to inspect, edit, diff, and copy. There is no database to migrate, no service to keep alive, and no embedding index to explain before a human can understand what the agent believes it learned.
+Multiple writers can still touch the same root. The package coordinates short writes with an advisory file lock and uses content-derived markers to deduplicate supported identical retries. A retry may repair an interrupted write or reject an operation whose state has been superseded. See the [save and retry limits](concepts.md#retry-saves-without-restoring-old-state).
 
-That choice does not make concurrency disappear. Multiple writers can still touch the same root. The package handles the short write section with an advisory file lock and content-derived markers, so replayed writes are no-ops and each saved block carries provenance.
-
-The important claim is narrow: this is a small reference implementation for making corrected lessons stick. It is not a general memory benchmark system, not a hosted memory platform, and not a promise that file-based recall beats every other approach. It is a working shape for a specific loop: capture the lesson, check whether it should already have fired, log the outcome, and promote only the lessons that prove broad enough to deserve permanence.
+The reference implementation supports capturing a lesson, retrieving candidates, recording judgments with provenance, and proposing recurring lessons for promotion. Promotion requires a broad behavioral lesson and the user's approval. The included evaluation tests cover detection; it does not establish behavioral improvement, full agent save latency, or superiority over other memory approaches.

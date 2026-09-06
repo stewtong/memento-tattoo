@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import uuid
+import warnings
 from pathlib import Path
 from typing import Optional
 
@@ -10,7 +13,7 @@ from .lock import memory_lock
 
 # Write vocabulary. Read-side helpers below still tolerate legacy events carrying
 # existing-repaired or false-positive.
-DECISIONS = ("new", "existing-missed")
+DECISIONS = ("new", "related", "existing-missed", "applied", "overapplied")
 _REPEAT_DECISIONS = ("existing-missed", "existing-repaired")
 _HEALTH_DECISIONS = ("new", "existing-missed")
 RETENTION_LOG_ROTATE_BYTES = 128 * 1024
@@ -37,9 +40,40 @@ def _append_line(path: Path, line: str) -> None:
         handle.write(line.rstrip("\n") + "\n")
 
 
+def _atomic_write(path: Path, lines: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _lines(path: Path) -> list[str]:
+    return [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()] if path.exists() else []
+
+
+def _overlap(archive: list[str], hot: list[str]) -> int:
+    """Find copies left at the rotation boundary, without deduplicating history.
+
+    Only event identities establish that a boundary match is a copied event.
+    Equal legacy content may represent separate observations; preserve it.
+    """
+    for count in range(min(len(archive), len(hot)), 0, -1):
+        if archive[-count:] == hot[:count]:
+            if all(json.loads(line).get("event_id") for line in hot[:count]):
+                return count
+            warnings.warn("identical legacy retention events at the archive boundary are preserved; "
+                          "reconcile against source evidence before treating them as separate observations",
+                          RuntimeWarning, stacklevel=2)
+            return 0
+    return 0
+
+
 def append_retention_event(event: dict, *, root: Path, assume_locked: bool = False) -> None:
     path = paths_for(root).retention_log
-    line = json.dumps(event, ensure_ascii=False, sort_keys=True)
+    line = json.dumps({**event, "event_id": uuid.uuid4().hex}, ensure_ascii=False, sort_keys=True)
     if assume_locked:
         _append_line(path, line)
         rotate_retention_log(root=root, assume_locked=True)
@@ -58,13 +92,29 @@ def rotate_retention_log(
 ) -> int:
     paths = paths_for(root)
     hot = paths.retention_log
-    if not hot.exists() or hot.stat().st_size <= rotate_bytes:
-        return 0
-
     def _do() -> int:
-        lines = [line for line in hot.read_text(encoding="utf-8").splitlines() if line.strip()]
+        archive = _lines(paths.retention_archive)
+        lines = _lines(hot)
+        overlap = _overlap(archive, lines)
+        if overlap:
+            lines = lines[overlap:]
+            _atomic_write(hot, lines)
+        if sum(len((line + "\n").encode("utf-8")) for line in lines) <= rotate_bytes:
+            return overlap
         if not lines:
             return 0
+        # Give each legacy occurrence its own identity before any archive copy.
+        # A failed replacement leaves the old hot file intact. After replacement,
+        # subsequent interrupted rotations can be reconciled without guessing.
+        identified = []
+        for line in lines:
+            event = json.loads(line)
+            if not event.get("event_id"):
+                line = json.dumps({**event, "event_id": uuid.uuid4().hex}, ensure_ascii=False, sort_keys=True)
+            identified.append(line)
+        if identified != lines:
+            _atomic_write(hot, identified)
+            lines = identified
         encoded = [(line + "\n").encode("utf-8") for line in lines]
         retained_bytes = 0
         retained_count = 0
@@ -81,10 +131,11 @@ def rotate_retention_log(
         old, recent = lines[:retain_from], lines[retain_from:]
         if not old:
             return 0
-        for line in old:
-            _append_line(paths.retention_archive, line)
-        hot.write_text("\n".join(recent) + "\n", encoding="utf-8")
-        return len(old)
+        # Archive first. An interruption before the hot replacement leaves only
+        # a recognizable boundary overlap, which readers ignore and retries trim.
+        _atomic_write(paths.retention_archive, archive + old)
+        _atomic_write(hot, recent)
+        return overlap + len(old)
 
     if assume_locked:
         return _do()
@@ -94,23 +145,22 @@ def rotate_retention_log(
 
 def read_retention_events(*, root: Path, include_archive: bool = True) -> list[dict]:
     paths = paths_for(root)
-    sources = []
-    if include_archive and paths.retention_archive.exists():
-        sources.append(paths.retention_archive)
-    if paths.retention_log.exists():
-        sources.append(paths.retention_log)
-    events = []
-    for path in sources:
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            raw = raw.strip()
-            if raw:
-                events.append(json.loads(raw))
-    return events
+    # Read the hot store around the archive read. If a writer trims or appends
+    # during the read, retry rather than combining different rotation states.
+    # Read-only commands must not create a lock file in an example or user root.
+    for _ in range(3):
+        hot = _lines(paths.retention_log)
+        archive = _lines(paths.retention_archive) if include_archive else []
+        if hot == _lines(paths.retention_log):
+            return [json.loads(line) for line in archive + hot[_overlap(archive, hot):]]
+    raise RuntimeError("retention history changed during read; retry")
 
 
-def recurrence_counts(*, root: Path) -> dict[str, int]:
+def recurrence_counts(*, root: Path, observed_only: bool = False) -> dict[str, int]:
     counts: dict[str, int] = {}
     for event in read_retention_events(root=root):
+        if observed_only and event.get("decision_source") != "author":
+            continue
         if event.get("decision") in _REPEAT_DECISIONS:
             note_id = event.get("cover_note_id") or event.get("covered_note_id") or event.get("note_id")
             if note_id:
@@ -149,10 +199,12 @@ def classify(
     root: Path,
     min_score: int = DEFAULT_MIN_SCORE,
     limit: int = 5,
+    exclude_note_id: str | None = None,
 ) -> dict:
     from .recall import rank_memento_notes
 
-    ranked = rank_memento_notes(situation, root=root, limit=limit)
+    ranked = rank_memento_notes(situation, root=root, limit=limit + (1 if exclude_note_id else 0))
+    ranked = [item for item in ranked if item.note.note_id != exclude_note_id][:limit]
     candidates = [
         {"note_id": item.note.note_id, "rank": index + 1, "score": item.score}
         for index, item in enumerate(ranked)
@@ -181,6 +233,6 @@ def classify(
     return {
         "candidates": candidates,
         "has_cover": has_cover,
-        "suggested_decision": "existing-missed" if has_cover else "new",
+        "suggested_decision": "related" if has_cover else "new",
         "cover_note_id": cover_note_id,
     }

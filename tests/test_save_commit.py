@@ -160,7 +160,7 @@ def test_save_commit_rejects_retention_for_seed_note(tmp_path: Path):
     result = save_commit(spec, root=tmp_path)
 
     assert not result.ok
-    assert result.error == "retention requires correction, reflection, or pattern note"
+    assert result.error == "retention requires correction or reflection note"
     assert not (tmp_path / "sessions").exists()
 
 
@@ -186,3 +186,45 @@ def test_artifact_verification_failure_reports_touched_artifacts(tmp_path: Path)
     assert "verify string missing" in result.error
     assert result.touched
     assert (tmp_path / "sessions" / "sess_abcd.md").exists()
+
+
+def test_stale_expected_registry_entry_fails_before_session(tmp_path):
+    from memento_tattoo.registry import registry_queue, drain
+    registry_queue('sess_base', 'add', 'memento-oss', '- Memento OSS - current/ - active', tmp_path, agent='codex')
+    assert drain(tmp_path).ok
+    before = (tmp_path/'registry.md').read_bytes()
+    spec = _spec('sess_stale')
+    spec['registry_delta']['expected_line'] = '- Memento OSS - old/ - active'
+    result = save_commit(spec, root=tmp_path)
+    assert not result.ok
+    assert 'stale registry' in result.error
+    assert not (tmp_path/'sessions/sess_stale.md').exists()
+    assert (tmp_path/'registry.md').read_bytes() == before
+
+
+def test_session_only_save_rebuilds_indexes_without_registry_delta(tmp_path):
+    from memento_tattoo.rebuild import rebuild
+    spec = _spec('sess_only')
+    for key in ['registry_delta','note','tattoo','project_edit','verify']:
+        spec.pop(key,None)
+    result = save_commit(spec, root=tmp_path)
+    assert result.ok, result.render()
+    assert 'sess_only' in (tmp_path/'sessions/index.md').read_text()
+    assert 'sess_only' in (tmp_path/'sessions/index-recent.md').read_text()
+    assert rebuild(tmp_path, check=True)[0]
+
+
+def test_guarded_archive_save_replay(tmp_path):
+    from memento_tattoo.registry import registry_queue, drain
+    line = '- Memento OSS - memento-oss/ - active'
+    registry_queue('sess_base','add','memento-oss',line,tmp_path,agent='codex',expected_line='')
+    assert drain(tmp_path).ok
+    spec = _spec('sess_archive')
+    for key in ['note','tattoo','project_edit','verify']:
+        spec.pop(key,None)
+    spec['registry_delta'].update(action='archive', expected_line=line)
+    first=save_commit(spec,root=tmp_path)
+    assert first.ok,first.render()
+    replay=save_commit(spec,root=tmp_path)
+    assert replay.ok,replay.render()
+    assert 'status=archived' in (tmp_path/'registry.md').read_text()

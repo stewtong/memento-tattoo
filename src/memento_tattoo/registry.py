@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import re
 import shutil
 import time
@@ -17,7 +18,7 @@ from .rebuild import build_generated_files
 
 _ACTIONS = {"add", "update", "archive"}
 _DELTA_RE = re.compile(r"<!--\s*registry-delta\s+(?P<attrs>.*?)\s*-->")
-_ENTRY_RE = re.compile(r"<!--\s*registry-entry\s+(?P<attrs>.*?)\s*-->\n(?P<line>.*?)(?=\n<!--\s*registry-|$)", re.DOTALL)
+_ENTRY_RE = re.compile(r"<!--\s*registry-entry\s+(?P<attrs>.*?)\s*-->")
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class RegistryDelta:
     agent: str
     ts: str
     line: str
+    expected_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -76,37 +78,86 @@ def registry_queue(
     root: Path,
     agent: str | None = None,
     ts: str | None = None,
+    expected_line: str | None = None,
 ) -> Path:
     action = action.strip().lower()
     if action not in _ACTIONS:
         raise ValueError(f"registry action must be one of {', '.join(sorted(_ACTIONS))}")
     paths = paths_for(root)
-    timestamp = ts or now_iso()
-    safe_ts = _safe_ts(timestamp)
-    normalized_slug = slugify(slug)
-    token = uuid.uuid4().hex[:8]
-    final = paths.queue / f"{safe_ts}.{sess}.{normalized_slug}.{token}.registry.md"
-    partial = final.with_suffix(final.suffix + ".partial")
-    final.parent.mkdir(parents=True, exist_ok=True)
-    body = (
-        f"<!-- registry-delta sess={sess} action={action} slug={normalized_slug} "
-        f"agent={resolve_agent(agent)} ts={timestamp} -->\n"
-        f"{line.rstrip()}\n"
-    )
-    partial.write_text(body, encoding="utf-8")
-    partial.replace(final)
-    return final
+    validate_registry_delta(sess, action, slug, line)
+    expected_sha256 = expected_line_hash(expected_line)
+    with memory_lock(paths.root):
+        prior = registry_receipt(paths.root, sess, action, slug, line, agent=agent)
+        if prior is not None:
+            return prior
+        _check_expected(_parse_registry(paths.registry).get(slugify(slug)), expected_sha256, sess, action, line)
+        timestamp = ts or now_iso()
+        safe_ts = _safe_ts(timestamp)
+        normalized_slug = slugify(slug)
+        token = uuid.uuid4().hex[:8]
+        final = paths.queue / f"{safe_ts}.{sess}.{normalized_slug}.{token}.registry.md"
+        body = (
+            f"<!-- registry-delta sess={sess} action={action} slug={normalized_slug} "
+            f"agent={resolve_agent(agent)} ts={timestamp}"
+            f"{' expected_sha256=' + expected_sha256 if expected_sha256 is not None else ''} -->\n"
+            f"{line.rstrip()}\n"
+        )
+        _atomic_write(final, body)
+        return final
+
+
+def validate_registry_delta(sess: str, action: str, slug: str, line: str) -> None:
+    if not re.fullmatch(r"sess_\w+", sess):
+        raise ValueError("invalid registry session id")
+    if action not in _ACTIONS or not slug.strip():
+        raise ValueError("invalid registry action or slug")
+    if not line.strip() or len(line.strip().splitlines()) != 1:
+        raise ValueError("registry line must be a nonempty single line")
+    if re.search(r"<!--\s*registry-", line):
+        raise ValueError("registry line cannot contain registry metadata")
+
+
+def expected_line_hash(line: str | None) -> str | None:
+    if line is None:
+        return None
+    if not isinstance(line, str) or "\n" in line or "\r" in line:
+        raise ValueError("expected_line must be one line; empty means absent")
+    return hashlib.sha256(line.encode("utf-8")).hexdigest()
+
+
+def _check_expected(entry: RegistryEntry | None, expected: str | None, sess: str, action: str, line: str) -> None:
+    if expected is None:
+        return
+    current = entry.line if entry is not None else ""
+    recovery = entry is not None and entry.sess == sess and entry.line == (_archive_line(line.strip()) if action == "archive" else line.strip()) and entry.status == ("archived" if action == "archive" else "active")
+    if expected_line_hash(current) != expected and not recovery:
+        raise ValueError("stale registry delta; reread and reconcile the current entry")
+
+
+def preflight_registry(root: Path, sess: str, action: str, slug: str, line: str, expected_line: str | None) -> None:
+    expected = expected_line_hash(expected_line)
+    paths = paths_for(root)
+    with memory_lock(paths.root):
+        _check_expected(_parse_registry(paths.registry).get(slugify(slug)), expected, sess, action, line)
+
+
+def registry_receipt(root: Path, sess: str, action: str, slug: str, line: str, *, agent: str | None = None) -> Path | None:
+    queue = paths_for(root).queue
+    for folder in (queue, queue / "applied", queue / "applied/archive", queue / "conflicts", queue / "conflicts/archive"):
+        for path in folder.glob(f"*.{sess}.{slugify(slug)}.*.registry.md"):
+            delta = _parse_delta(path)
+            if (delta.sess, delta.action, delta.slug, delta.line, delta.agent) == (sess, action, slugify(slug), line.strip(), resolve_agent(agent)):
+                return path
+    return None
 
 
 APPLIED_KEEP = 100
 """How many drained delta files to retain in applied/ as a provenance audit trail.
-Consumed deltas are kept for idempotency/history, but nothing bounded the dir, so it
-grew without limit. Keep the newest N; older ones are pure history and safe to drop."""
+Older receipts move to archive/ and remain available for replay checks."""
 
 
 def prune_applied(applied_dir: Path, keep: int = APPLIED_KEEP) -> int:
-    """Delete all but the `keep` most-recent files in applied/ (by mtime, name tiebreak).
-    Returns the number removed. No-op if the dir is missing or under the limit."""
+    """Archive all but the newest `keep` receipts; preserve replay evidence."""
     if not applied_dir.exists():
         return 0
     files = [p for p in applied_dir.glob("*.registry.md") if p.is_file()]
@@ -116,7 +167,11 @@ def prune_applied(applied_dir: Path, keep: int = APPLIED_KEEP) -> int:
     removed = 0
     for p in files[: len(files) - keep]:
         try:
-            p.unlink()
+            target = applied_dir / "archive" / p.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                raise FileExistsError(f"receipt archive collision: {target}")
+            p.replace(target)
             removed += 1
         except FileNotFoundError:
             pass
@@ -171,14 +226,14 @@ def archive_registry_conflicts(
         return _do()
 
 
-def drain(root: Path, timeout: float = 10.0) -> DrainResult:
+def drain(root: Path, timeout: float = 10.0, *, rebuild_indexes: bool = True) -> DrainResult:
     paths = paths_for(root)
-    generated = build_generated_files(paths.root)
     applied = 0
     conflicts = 0
     errors: list[str] = []
     try:
         with memory_lock(paths.root, timeout=timeout):
+            generated = build_generated_files(paths.root) if rebuild_indexes else {}
             while True:
                 queue_files = sorted(paths.queue.glob("*.registry.md"), key=lambda path: path.name)
                 if not queue_files:
@@ -197,12 +252,19 @@ def drain(root: Path, timeout: float = 10.0) -> DrainResult:
                     errors.append(str(exc))
                     break
                 winners, losers = _choose_winners(deltas)
+                try:
+                    for delta in winners:
+                        _check_expected(entries.get(delta.slug), delta.expected_sha256, delta.sess, delta.action, delta.line)
+                except ValueError as exc:
+                    errors.append(str(exc))
+                    break
                 for delta in winners:
                     entries[delta.slug] = _entry_from_delta(delta, losers_by_slug=losers)
                     applied += 1
                 _write_registry(paths.registry, entries)
                 for path, text in generated.items():
-                    _atomic_write(path, text)
+                    if not path.exists() or path.read_text(encoding="utf-8") != text:
+                        _atomic_write(path, text)
                 for delta in winners:
                     _move_delta(delta.path, paths.queue / "applied")
                 for loser in [delta for group in losers.values() for delta in group]:
@@ -241,6 +303,10 @@ def _parse_delta(path: Path) -> RegistryDelta:
     if missing or attrs.get("action") not in _ACTIONS or not line:
         detail = ", ".join(missing) if missing else "invalid action or empty line"
         raise ValueError(f"invalid registry delta {path}: {detail}")
+    validate_registry_delta(attrs["sess"], attrs["action"], attrs["slug"], line)
+    expected = attrs.get("expected_sha256")
+    if expected is not None and not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise ValueError(f"invalid expected hash: {path}")
     return RegistryDelta(
         path=path,
         sess=attrs.get("sess", ""),
@@ -249,27 +315,52 @@ def _parse_delta(path: Path) -> RegistryDelta:
         agent=attrs.get("agent", "unknown"),
         ts=attrs.get("ts", ""),
         line=line,
+        expected_sha256=expected,
     )
 
 
 def _parse_registry(path: Path) -> dict[str, RegistryEntry]:
     if not path.exists():
         return {}
-    text = path.read_text(encoding="utf-8")
-    if "<!-- registry-entry" in text and not _ENTRY_RE.search(text):
-        raise ValueError(f"unreadable registry entry: {path}")
+    lines = path.read_text(encoding="utf-8").splitlines()
     entries: dict[str, RegistryEntry] = {}
-    for match in _ENTRY_RE.finditer(text):
+    index = 0
+    comments: list[str] = []
+    while index < len(lines):
+        raw = lines[index].strip()
+        index += 1
+        if not raw or (raw == "# Registry" and not any(line.strip() for line in lines[:index - 1])):
+            continue
+        if re.fullmatch(r"<!--\s*registry-conflict\s+[^<>]*\s*-->", raw):
+            comments.append(raw)
+            continue
+        match = _ENTRY_RE.fullmatch(raw)
+        if match is None or index == len(lines):
+            raise ValueError(f"unreadable registry entry at line {index}: {path}")
         attrs = _parse_attrs(match.group("attrs"))
+        tokens = match.group("attrs").split()
+        if (not attrs.get("slug") or len(tokens) != len(attrs)
+                or any(not re.fullmatch(r"[a-zA-Z_][\w-]*=[^\s<>]+", token) for token in tokens)
+                or set(attrs) - {"slug", "status", "updated", "agent", "sess"}
+                or attrs.get("status", "active") not in ("active", "archived")):
+            raise ValueError(f"invalid registry entry at line {index}: {path}")
         slug = slugify(attrs.get("slug", ""))
+        line = lines[index].strip()
+        index += 1
+        if slug in entries or not line or re.search(r"<!--\s*registry-", line):
+            raise ValueError(f"duplicate or malformed registry entry at line {index}: {path}")
         entries[slug] = RegistryEntry(
             slug=slug,
             status=attrs.get("status", "active"),
             updated=attrs.get("updated", ""),
             agent=attrs.get("agent", "unknown"),
             sess=attrs.get("sess", ""),
-            line=match.group("line").strip(),
+            line=line,
+            conflict_comment="\n".join(comments),
         )
+        comments.clear()
+    if comments:
+        raise ValueError(f"registry conflict has no entry: {path}")
     return entries
 
 
@@ -297,10 +388,12 @@ def _write_registry(path: Path, entries: dict[str, RegistryEntry]) -> None:
         entry = entries[slug]
         if entry.conflict_comment:
             lines.append(entry.conflict_comment)
-        lines.append(
-            f"<!-- registry-entry slug={entry.slug} status={entry.status} "
-            f"updated={entry.updated} agent={entry.agent} sess={entry.sess} -->"
-        )
+        attrs = {"slug": entry.slug, "status": entry.status, "updated": entry.updated,
+                 "agent": entry.agent, "sess": entry.sess}
+        # Legacy entries may omit provenance; do not invent it or serialize an
+        # empty attribute, which would make the next parse fail.
+        header = " ".join(f"{key}={value}" for key, value in attrs.items() if value)
+        lines.append(f"<!-- registry-entry {header} -->")
         lines.append(entry.line)
         lines.append("")
     _atomic_write(path, "\n".join(lines).rstrip() + "\n")

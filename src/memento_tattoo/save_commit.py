@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .config import paths_for
 from .rebuild import rebuild
-from .registry import drain, registry_queue, slugify
+from .registry import drain, registry_queue, slugify, registry_receipt, validate_registry_delta, _parse_registry, _archive_line, preflight_registry, expected_line_hash
+from .lock import memory_lock
 from .retention import DECISIONS
-from .session_store import render_session_block, write_session_block
+from .session_store import render_session_block, write_session_block, load_sessions
 from .write_through import note_add, project_edit, tattoo_add
 
 
@@ -76,6 +78,7 @@ def save_commit(
     agent = spec["agent"]
 
     try:
+        registry_spec = spec.get("registry_delta")
         session = spec["session"]
         block = render_session_block(
             sess,
@@ -89,6 +92,19 @@ def save_commit(
             insights=session["insights"],
             files=session["files"],
         )
+        existing_path = paths.sessions / f"{sess}.md"
+        if existing_path.exists() and existing_path.read_text(encoding="utf-8") != block:
+            raise FileExistsError(f"session file already exists with different content: {existing_path}")
+        if registry_spec and any(record.sess == sess for record in load_sessions(paths.root)):
+            receipt = registry_receipt(paths.root, sess, registry_spec["action"], registry_spec["slug"], registry_spec["line"], agent=agent)
+            if receipt is None:
+                raise ValueError("existing session has no delta receipt; review current state and use a new session")
+            if receipt.parent != paths.queue:
+                entry = _parse_registry(paths.registry).get(slugify(registry_spec["slug"]))
+                if entry is None or entry.sess != sess or not _registry_delta_applied(paths.registry, registry_spec, sess, agent):
+                    raise ValueError("registry operation was superseded; review current state and use a new session")
+        if registry_spec:
+            preflight_registry(paths.root, sess, registry_spec["action"], registry_spec["slug"], registry_spec["line"], registry_spec.get("expected_line"))
         session_path = write_session_block(paths.root, block, sess)
         if session_path.read_text(encoding="utf-8") != block:
             raise RuntimeError("session verification failed")
@@ -107,10 +123,11 @@ def save_commit(
                 decision=retention.get("decision"),
                 covered_note_id=retention.get("covered_note_id"),
             )
-            if not _marker_in_files(marker, [paths.notes, paths.notes_archive]):
+            note_paths = [path for path in (paths.notes, paths.notes_archive) if _marker_in_files(marker, [path])]
+            if not note_paths:
                 raise RuntimeError("note marker missing after write")
-            touched.append(paths.notes)
-            steps.append(StepResult("note", True, paths.notes))
+            touched.extend(note_paths)
+            steps.append(StepResult("note", True, note_paths[0]))
 
         if spec.get("tattoo"):
             _, marker = tattoo_add(spec["tattoo"], sess=sess, root=paths.root, agent=agent)
@@ -139,7 +156,7 @@ def save_commit(
 
         registry_spec = spec.get("registry_delta")
         queued = False
-        if registry_spec and not _registry_has_line(paths.registry, registry_spec["line"]):
+        if registry_spec:
             queue_path = registry_queue(
                 sess,
                 registry_spec["action"],
@@ -147,12 +164,13 @@ def save_commit(
                 registry_spec["line"],
                 paths.root,
                 agent=agent,
+                expected_line=registry_spec.get("expected_line"),
             )
             touched.append(queue_path)
             steps.append(StepResult("registry_queue", True, queue_path))
             queued = True
 
-        drain_result = drain(paths.root)
+        drain_result = drain(paths.root, rebuild_indexes=False)
         if drain_result.skipped:
             steps.append(StepResult("drain", allow_deferred_drain, message="deferred"))
             if allow_deferred_drain:
@@ -163,7 +181,7 @@ def save_commit(
             return SaveCommitResult(ok=False, steps=steps, touched=touched, error="drain failed")
         if queued or registry_spec:
             touched.append(paths.registry)
-        if registry_spec and not _registry_delta_applied(paths.registry, registry_spec):
+        if registry_spec and not _registry_delta_applied(paths.registry, registry_spec, sess, agent):
             steps.append(StepResult("registry_verify", False, paths.registry, "registry delta not durable"))
             return SaveCommitResult(ok=False, steps=steps, touched=touched, error="registry verification failed")
         if registry_spec:
@@ -193,7 +211,7 @@ def _validate(spec: dict[str, Any]) -> str:
     if unknown:
         return f"unknown top-level keys: {', '.join(unknown)}"
     sess = spec.get("sess")
-    if not isinstance(sess, str) or not sess.startswith("sess_"):
+    if not isinstance(sess, str) or not re.fullmatch(r"sess_\w+", sess):
         return "sess must start with sess_"
     if not isinstance(spec.get("agent"), str) or not spec.get("agent", "").strip():
         return "agent is required"
@@ -215,10 +233,10 @@ def _validate(spec: dict[str, Any]) -> str:
         value = session.get(key)
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
             return f"session.{key} must be a list of strings"
-    if session.get("significance") not in {"low", "medium", "high"}:
+    if session.get("significance") not in ("low", "medium", "high"):
         return "session.significance must be low, medium, or high"
     note_kind = spec.get("note_kind", "reflection")
-    if note_kind not in {"correction", "reflection", "seed", "pattern"}:
+    if note_kind not in ("correction", "reflection", "seed", "pattern"):
         return "note_kind must be correction, reflection, seed, or pattern"
     for key in ("note", "tattoo", "author"):
         if key in spec and spec[key] is not None and not isinstance(spec[key], str):
@@ -227,19 +245,24 @@ def _validate(spec: dict[str, Any]) -> str:
     if not isinstance(verify, list) or not all(isinstance(item, str) for item in verify):
         return "verify must be a list of strings"
     registry_delta = spec.get("registry_delta")
-    if registry_delta:
+    if registry_delta is not None:
         if not isinstance(registry_delta, dict):
             return "registry_delta must be an object"
         missing_registry = [key for key in ("action", "slug", "line") if not isinstance(registry_delta.get(key), str) or not registry_delta.get(key)]
         if missing_registry:
             return f"registry_delta missing keys: {', '.join(missing_registry)}"
-        unknown_registry = sorted(set(registry_delta) - {"action", "slug", "line"})
+        unknown_registry = sorted(set(registry_delta) - {"action", "slug", "line", "expected_line"})
         if unknown_registry:
             return f"registry_delta unknown keys: {', '.join(unknown_registry)}"
         if registry_delta.get("action") not in {"add", "update", "archive"}:
             return "registry_delta.action must be add, update, or archive"
+        try:
+            validate_registry_delta(sess, registry_delta["action"], registry_delta["slug"], registry_delta["line"])
+            expected_line_hash(registry_delta.get("expected_line"))
+        except ValueError as exc:
+            return str(exc)
     project_edit_spec = spec.get("project_edit")
-    if project_edit_spec:
+    if project_edit_spec is not None:
         if not isinstance(project_edit_spec, dict):
             return "project_edit must be an object"
         for key in ("project", "body"):
@@ -253,23 +276,25 @@ def _validate(spec: dict[str, Any]) -> str:
             if key in project_edit_spec and project_edit_spec[key] is not None and not isinstance(project_edit_spec[key], str):
                 return f"project_edit.{key} must be a string"
         mode = project_edit_spec.get("mode", "auto")
-        if mode not in {"auto", "append", "replace"}:
+        if mode not in ("auto", "append", "replace"):
             return "project_edit.mode must be auto, append, or replace"
     retention = spec.get("retention")
-    if retention:
+    if retention is not None:
         if not isinstance(retention, dict):
             return "retention must be an object"
         if not spec.get("note"):
             return "retention requires note"
-        if spec.get("note_kind", "reflection") == "seed":
-            return "retention requires correction, reflection, or pattern note"
+        if spec.get("note_kind", "reflection") in ("seed", "pattern") and retention:
+            return "retention requires correction or reflection note"
         allowed_retention = {"decision", "covered_note_id"}
         unknown_retention = sorted(set(retention) - allowed_retention)
         if unknown_retention:
             return f"retention unknown keys: {', '.join(unknown_retention)}"
         decision = retention.get("decision")
-        if decision and decision not in DECISIONS:
-            return "retention.decision must be new or existing-missed"
+        if decision is not None and decision not in DECISIONS:
+            return "invalid retention.decision"
+        if retention.get("covered_note_id") is not None and not isinstance(retention["covered_note_id"], str):
+            return "retention.covered_note_id must be a string"
     return ""
 
 
@@ -277,23 +302,21 @@ def _marker_in_files(marker: str, paths: list[Path]) -> bool:
     return any(path.exists() and marker in path.read_text(encoding="utf-8") for path in paths)
 
 
-def _registry_delta_applied(path: Path, spec: dict[str, str]) -> bool:
-    if not path.exists():
-        return False
-    text = path.read_text(encoding="utf-8")
-    slug = slugify(spec["slug"])
-    if spec["action"] == "archive":
-        return f"slug={slug} status=archived" in text
-    return f"slug={slug} status=active" in text and spec["line"].rstrip() in text
+def _registry_delta_applied(path: Path, spec: dict[str, str], sess: str, agent: str) -> bool:
+    with memory_lock(path.parent):
+        entry = _parse_registry(path).get(slugify(spec["slug"]))
+        receipt = registry_receipt(path.parent, sess, spec["action"], spec["slug"], spec["line"], agent=agent)
+        applied = paths_for(path.parent).queue / "applied"
+        if entry is None or entry.sess != sess or receipt is None or receipt.parent not in (applied, applied / "archive"):
+            return False
+        archived = spec["action"] == "archive"
+        line = _archive_line(spec["line"].strip()) if archived else spec["line"].strip()
+        return entry.status == ("archived" if archived else "active") and entry.line == line
 
 
 def _project_path(root: Path, value: str) -> Path:
     path = Path(value)
     return path if path.is_absolute() else root / path
-
-
-def _registry_has_line(path: Path, line: str) -> bool:
-    return path.exists() and line.rstrip() in path.read_text(encoding="utf-8")
 
 
 def _missing_verify_strings(verify: list[str], touched: list[Path]) -> list[str]:

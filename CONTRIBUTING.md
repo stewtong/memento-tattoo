@@ -8,6 +8,8 @@ This project is early and intentionally small. The useful contribution shape is 
 - a small fix that keeps the file-based model understandable
 - documentation that makes first-run usage clearer
 
+When reporting a bug, include the package version, Python version, and, for a source checkout, the output of `git rev-parse HEAD`. Include a small synthetic reproduction and the observed result.
+
 ## Local setup
 
 Use Python 3.11 or newer. The examples below use Python 3.12; use `python3.11` if that is the supported interpreter on your system.

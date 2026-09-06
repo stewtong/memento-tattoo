@@ -61,7 +61,7 @@ def test_cli_note_add_rejects_seed_retention_judgment(tmp_path: Path, capsys):
     )
 
     assert code == 2
-    assert "retention overrides require correction, reflection, or pattern notes" in capsys.readouterr().out
+    assert "retention overrides require correction or reflection notes" in capsys.readouterr().out
     assert not (tmp_path / "retention_log.jsonl").exists()
 
 

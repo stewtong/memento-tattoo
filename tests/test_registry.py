@@ -9,11 +9,11 @@ def test_slugify_normalizes_human_names():
     assert slugify("") == "unnamed"
 
 
-def test_registry_queue_uses_unique_filenames_for_same_session_slug(tmp_path: Path):
+def test_registry_queue_reuses_identical_operation_receipt(tmp_path: Path):
     first = registry_queue("sess_abcd", "update", "Agent Skills", "- Agent Skills - agent_skills/ - active", tmp_path, agent="codex")
     second = registry_queue("sess_abcd", "update", "Agent Skills", "- Agent Skills - agent_skills/ - active", tmp_path, agent="codex")
 
-    assert first != second
+    assert first == second
     assert first.exists()
     assert second.exists()
     assert first.name.endswith(".registry.md")
@@ -63,7 +63,7 @@ def test_double_drain_is_idempotent(tmp_path: Path):
     assert not list((tmp_path / "_queue").glob("*.registry.md"))
 
 
-def test_prune_applied_keeps_newest_and_deletes_older(tmp_path: Path):
+def test_prune_applied_keeps_newest_and_archives_older(tmp_path: Path):
     import os
     from memento_tattoo.registry import prune_applied
     applied = tmp_path / "applied"
@@ -75,6 +75,7 @@ def test_prune_applied_keeps_newest_and_deletes_older(tmp_path: Path):
     removed = prune_applied(applied, keep=3)
     remaining = sorted(q.name for q in applied.glob("*.registry.md"))
     assert removed == 2
+    assert len(list((applied / "archive").glob("*.registry.md"))) == 2
     assert remaining == ["sess_2.proj.registry.md", "sess_3.proj.registry.md", "sess_4.proj.registry.md"]
 
 

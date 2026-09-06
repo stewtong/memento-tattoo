@@ -68,7 +68,7 @@ def test_strong_cover_with_close_high_neighbor_suggests_existing_missed(tmp_path
     assert top["score"] >= 120  # strong absolute match
     assert top["note_id"] == "sess_c1.note.cccccccc"
     assert result["has_cover"] is True
-    assert result["suggested_decision"] == "existing-missed"
+    assert result["suggested_decision"] == "related"
 
 
 def test_note_add_logs_checked_reflection(tmp_path: Path):
@@ -136,7 +136,7 @@ def test_note_add_can_record_agent_retention_judgment(tmp_path: Path):
 
 
 def test_seed_note_rejects_retention_judgment(tmp_path: Path):
-    with pytest.raises(ValueError, match="retention judgment requires correction, reflection, or pattern"):
+    with pytest.raises(ValueError, match="retention judgment requires correction or reflection"):
         note_add(
             "Situation: import\nNote: seed data",
             sess="sess_seed",
@@ -170,7 +170,7 @@ def test_classify_cluster_cover_uses_shared_tags_when_flat_high(tmp_path: Path):
     )
 
     assert result["has_cover"] is True
-    assert result["suggested_decision"] == "existing-missed"
+    assert result["suggested_decision"] == "related"
     assert result["cover_note_id"] == "sess_b.note.bbbbbbbb"
 
 
@@ -181,3 +181,26 @@ def test_recurrence_counts_tolerates_legacy_existing_repaired_and_cover_field(tm
     )
 
     assert recurrence_counts(root=tmp_path) == {"sess_old.note.22222222": 1}
+
+
+def test_successful_reflection_is_related_not_a_miss(tmp_path):
+    from memento_tattoo.garden import build_digest
+    note_add('Situation: comparing benchmark latency distributions\nNote: inspect percentile tails.', sess='sess_seed', root=tmp_path, kind='seed')
+    note_add('Situation: comparing benchmark latency distributions\nNote: successfully inspected percentile tails.', sess='sess_good', root=tmp_path, kind='reflection')
+    event = read_retention_events(root=tmp_path)[-1]
+    assert event['decision'] == 'related'
+    assert event['decision_source'] == 'classifier'
+    assert recurrence_counts(root=tmp_path, observed_only=True) == {}
+    assert 'author-recorded miss(es)' not in build_digest(root=tmp_path, today='2026-09-05')
+    note_add('Situation: comparing benchmark latency distributions\nNote: the lesson helped on another task.', sess='sess_used', root=tmp_path, kind='reflection', decision='applied', covered_note_id=event['cover_note_id'])
+    assert read_retention_events(root=tmp_path)[-1]['decision'] == 'applied'
+    assert recurrence_counts(root=tmp_path, observed_only=True) == {}
+
+
+def test_legacy_classifications_do_not_prove_recurrence(tmp_path):
+    from memento_tattoo.garden import build_digest
+    for _ in range(3):
+        append_retention_event({'decision':'existing-missed','note_id':'sess_old.note.1234'}, root=tmp_path)
+    assert recurrence_counts(root=tmp_path) == {'sess_old.note.1234':3}
+    assert recurrence_counts(root=tmp_path, observed_only=True) == {}
+    assert 'recurred 3x' not in build_digest(root=tmp_path, today='2026-09-05')

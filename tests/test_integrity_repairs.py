@@ -49,7 +49,7 @@ def test_session_id_collision_across_archive_is_rejected(tmp_path: Path):
 def test_garden_attributes_repair_to_cover_note_and_bounds_output(tmp_path: Path):
     events = []
     for index in range(12):
-        events.append({"decision": "existing-missed", "note_id": f"new-{index}", "cover_note_id": f"cover-{index}"})
+        events.append({"decision": "existing-missed", "decision_source": "author", "note_id": f"new-{index}", "cover_note_id": f"cover-{index}"})
     (tmp_path / "retention_log.jsonl").write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
     digest = build_digest(root=tmp_path, today="2026-08-28", limit=8)
     assert "cover-0" in digest
@@ -72,7 +72,9 @@ def test_retention_rotation_is_byte_bounded_and_lossless(tmp_path: Path):
     moved = rotate_retention_log(root=tmp_path, keep=500)
     assert moved > 0
     assert hot.stat().st_size <= 128 * 1024
-    assert read_retention_events(root=tmp_path) == before
+    after = read_retention_events(root=tmp_path)
+    assert len({event["event_id"] for event in after}) == len(before)
+    assert [{key: value for key, value in event.items() if key != "event_id"} for event in after] == before
 
 
 def test_doctor_fails_on_corrupt_tattoo_counter(tmp_path: Path):

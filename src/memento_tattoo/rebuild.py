@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import paths_for
 from .lock import memory_lock
-from .session_store import SessionRecord, load_sessions
+from .session_store import SessionRecord, load_sessions, parse_session_date
 
 
 def build_generated_files(root: Path) -> dict[Path, str]:
@@ -35,8 +35,8 @@ def _rebuild_locked(root: Path, *, check: bool = False) -> tuple[bool, str]:
             return False, f"session indexes stale; would change: {rel}"
         return True, "session indexes current"
 
-    for path, text in generated.items():
-        _atomic_write(path, text)
+    for path in changed:
+        _atomic_write(path, generated[path])
     return True, f"rebuilt session indexes: {len(generated)} files"
 
 
@@ -53,7 +53,7 @@ def _render_recent(records: list[SessionRecord]) -> str:
     lines = ["# Recent Sessions", ""]
     if not records:
         lines.append("- none")
-    for record in sorted(records, key=lambda item: (item.date, item.sess), reverse=True)[:50]:
+    for record in sorted(records, key=lambda item: (parse_session_date(item.date), item.sess), reverse=True)[:50]:
         lines.append(_record_line(record))
     return "\n".join(lines).rstrip() + "\n"
 

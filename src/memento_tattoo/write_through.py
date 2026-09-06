@@ -58,11 +58,20 @@ def rotate_hot_notes(hot_path: Path, archive_path: Path, *, threshold: Optional[
     if not moved:
         return 0
 
-    _atomic_write(hot_path, preamble + "".join(kept))
+    # Preserve the destination first. A failed source replacement leaves overlap,
+    # which a retry reconciles without duplicating archived blocks.
     existing = archive_path.read_text(encoding="utf-8") if archive_path.exists() else ""
-    if existing and not existing.endswith("\n"):
-        existing += "\n"
-    _atomic_write(archive_path, existing + "\n" + "".join(moved))
+    additions = []
+    for block in moved:
+        marker = block.splitlines()[0]
+        if marker in existing:
+            if block.strip() not in existing:
+                raise ValueError("archive marker exists with different note content")
+        else:
+            additions.append(block)
+    if additions:
+        _atomic_write(archive_path, existing.rstrip() + "\n\n" + "".join(additions))
+    _atomic_write(hot_path, preamble + "".join(kept))
     return len(moved)
 
 
@@ -79,6 +88,11 @@ def _append_eof(path: Path, sess: str, kind: str, body: str, *, agent: str = "un
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     if note_id in existing:
         return False, _find_existing_marker(existing, note_id) or marker
+    if kind == "note":
+        archive = path.with_name("notes_archive.md")
+        archived = archive.read_text(encoding="utf-8") if archive.exists() else ""
+        if note_id in archived:
+            return False, _find_existing_marker(archived, note_id) or marker
     prefix = existing
     if prefix and not prefix.endswith("\n"):
         prefix += "\n"
@@ -156,23 +170,24 @@ def note_add(
     paths = paths_for(root)
     agent_id = resolve_agent(agent)
     has_retention_judgment = decision is not None or covered_note_id is not None
+    if kind in ("seed", "pattern") and has_retention_judgment:
+        raise ValueError("retention judgment requires correction or reflection note")
 
     if kind == "seed":
-        if has_retention_judgment:
-            raise ValueError("retention judgment requires correction, reflection, or pattern note")
         with memory_lock(paths.root):
             applied, marker = _append_eof(paths.notes, sess, "note", text, agent=agent_id)
             rotate_hot_notes(paths.notes, paths.notes_archive)  # keep the hot file bounded
         return applied, marker
 
     from ._time import now_iso
-    from .retention import DECISIONS, append_retention_event, classify
+    from .retention import DECISIONS, append_retention_event, classify, read_retention_events, rotate_retention_log
 
     if decision is not None and decision not in DECISIONS:
         raise ValueError(f"decision must be one of: {', '.join(DECISIONS)}")
 
     situation = _first_situation_line(text)
-    result = classify(situation, root=paths.root)
+    note_id = f"{sess}.note.{_hash8(text)}"
+    result = classify(situation, root=paths.root, exclude_note_id=note_id)
     final_decision = decision or result["suggested_decision"]
     if result["has_cover"]:
         print(
@@ -184,7 +199,9 @@ def note_add(
         print(alt_hint, file=sys.stderr)
     with memory_lock(paths.root):
         applied, marker = _append_eof(paths.notes, sess, "note", text, agent=agent_id)
-        if applied and kind in ("correction", "reflection"):
+        if kind in ("correction", "reflection") and not any(
+            event.get("note_id") == note_id for event in read_retention_events(root=paths.root)
+        ):
             event = {
                 "ts": now_iso(),
                 "sess": sess,
@@ -194,9 +211,12 @@ def note_add(
                 "note_id": _note_id_from_marker(marker),
                 "candidates": result["candidates"],
                 "decision": final_decision,
+                "decision_source": "author" if decision is not None else "classifier",
                 "cover_note_id": covered_note_id or result["cover_note_id"],
             }
             append_retention_event(event, root=paths.root, assume_locked=True)
+        else:
+            rotate_retention_log(root=paths.root, assume_locked=True)
         if applied:
             from .tattoo_firing import bump_tattoo_firing
 

@@ -106,6 +106,23 @@ def render_ranked_notes(
 ) -> str:
     lines = ["MEMENTO_TATTOO_LOAD", f"query: {query}", "matches:"]
     ranked = rank_memento_notes(query, root=root, limit=limit, projects=projects)
+    lines[2:2] = [
+        "scope: root notes, archive, project.md, tattoos, and explicitly supplied project paths",
+        f"limit: {limit}",
+        f"shown: {len(ranked)}",
+        "completeness: bounded ranking; missing matches do not establish absence",
+    ]
+    state_paths = [paths_for(root).project, *[project_memory_path(project) for project in projects or []]]
+    states = [(path, _current_state(path)) for path in dict.fromkeys(state_paths)]
+    states = [(path, state) for path, state in states if state]
+    if states:
+        lines.insert(-1, "authority: current source and user direction outrank memory; apply lessons only within their situation")
+        lines.insert(-1, "current_project_state:")
+        for path, state in states[:5]:
+            lines.insert(-1, f"- source: {path}")
+            lines.insert(-1, f"  excerpt: {_one_line(state, limit=930)}")
+        if len(states) > 5:
+            lines.insert(-1, f"  omitted_project_states: {len(states) - 5}")
     if not ranked:
         lines.append("- none")
     for item in ranked:
@@ -114,12 +131,26 @@ def render_ranked_notes(
                 f"- note_id: {item.note.note_id}",
                 f"  source: {item.note.source_name}",
                 f"  score: {item.score}",
+                f"  superseded_by: {item.note.superseded_by or ''}",
                 f"  situation: {_one_line(item.note.situation)}",
                 f"  note: {_one_line(item.note.note)}",
                 f"  reasons: {'; '.join(item.reasons)}",
             ]
         )
     return "\n".join(lines)
+
+
+def _current_state(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    ordered = sorted(enumerate(lines), key=lambda pair: not bool(re.match(r"^##\s+current\b", pair[1], re.I)))
+    for index, line in ordered:
+        if re.match(r"^##\s+(?:current(?:\s+state|\s+status)?|state|status)\s*(?:\([^)]*\))?\s*$", line, re.I):
+            end = next((j for j in range(index + 1, len(lines)) if lines[j].startswith("## ")), len(lines))
+            text = " ".join(x for x in lines[index + 1:end] if not x.startswith("<!--"))
+            return text[:900] + (" [excerpt truncated]" if len(text) > 900 else "")
+    return ""
 
 
 def _load_notes_file(path: Path, source_name: str = "notes.md") -> list[MementoNote]:

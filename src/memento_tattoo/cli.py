@@ -105,6 +105,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     registry.add_argument("--sess", required=True)
     registry.add_argument("--action", choices=["add", "update", "archive"], required=True)
     registry.add_argument("--slug", required=True)
+    registry.add_argument("--expected-line", default=None, help="exact entry read before drafting; empty means absent")
     registry.add_argument("line")
 
     drain_parser = subparsers.add_parser("drain", help="drain queued registry deltas")
@@ -123,8 +124,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     root = Path(args.root).resolve() if args.root else Path.cwd() / "memento"
 
     if args.command == "note-add":
-        if args.kind == "seed" and (args.decision is not None or args.covered_note_id is not None):
-            print("error: retention overrides require correction, reflection, or pattern notes")
+        if args.kind in ("seed", "pattern") and (args.decision is not None or args.covered_note_id is not None):
+            print("error: retention overrides require correction or reflection notes")
             return 2
         applied, marker = note_add(
             args.text,
@@ -269,7 +270,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "registry-queue":
         from .registry import registry_queue
 
-        path = registry_queue(args.sess, args.action, args.slug, args.line, root, agent=args.agent)
+        path = registry_queue(args.sess, args.action, args.slug, args.line, root, agent=args.agent, expected_line=args.expected_line)
         print(f"queued {path}")
         return 0
 

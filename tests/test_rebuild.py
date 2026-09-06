@@ -51,3 +51,14 @@ def test_build_generated_files_sorts_recent_descending(tmp_path: Path):
     recent = generated[sessions / "index-recent.md"]
 
     assert recent.index("sess_new") < recent.index("sess_old")
+
+
+def test_recent_order_normalizes_offsets(tmp_path):
+    from memento_tattoo.session_store import render_session_block, write_session_block
+    from memento_tattoo.rebuild import rebuild
+    for sess, stamp in [('sess_late', '2026-09-05T17:00:00-07:00'), ('sess_early', '2026-09-06T00:30:00+02:00')]:
+        block = render_session_block(sess, date=stamp, agent='codex', topics=[], significance='low', accomplished='synthetic', started='none', pending='none', insights='none', files=[])
+        write_session_block(tmp_path, block, sess)
+    assert rebuild(tmp_path)[0]
+    text = (tmp_path / 'sessions/index-recent.md').read_text()
+    assert text.index('sess_late') < text.index('sess_early')

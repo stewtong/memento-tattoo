@@ -27,12 +27,23 @@ PUBLIC_ENTRIES = (
 
 def export_public(destination: Path, *, source_root: Optional[Path] = None) -> set[str]:
     source = (source_root or Path(__file__).resolve().parents[1]).resolve()
+    if destination.is_symlink():
+        raise ValueError("destination must not be a symlink")
     destination = destination.resolve()
-    if destination == source:
-        raise ValueError("destination must be separate from source root")
-
+    if destination == source or destination in source.parents or source in destination.parents:
+        raise ValueError("destination must be separate from source root and its ancestors and descendants")
     if destination.exists():
-        shutil.rmtree(destination)
+        raise FileExistsError("export destination already exists; choose a new directory")
+
+    # Validate the full source before creating an export. Following a link could
+    # copy private material from outside the selected public surface.
+    for entry in PUBLIC_ENTRIES:
+        src = source / entry
+        if not src.exists():
+            raise FileNotFoundError(src)
+        for path in [src, *src.rglob("*")]:
+            if path.is_symlink():
+                raise ValueError(f"public source contains a symlink: {path.relative_to(source)}")
     destination.mkdir(parents=True)
 
     copied: set[str] = set()

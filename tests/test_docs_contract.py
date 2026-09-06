@@ -17,12 +17,15 @@ def test_canonical_pattern_names_both_adoption_modes_and_coordination_boundary()
         assert guarantee in text
 
 
-def test_canonical_pattern_has_only_two_required_retention_outcomes():
+def test_canonical_pattern_separates_similarity_from_author_outcomes():
     text = _read("MEMENTO-PATTERN.md")
     section = text.split("## Retrieval checks", 1)[1].split("## Guardrails", 1)[0]
 
     assert "- `new`:" in section
+    assert "- `related`:" in section
     assert "- `existing-missed`:" in section
+    assert "- `applied`:" in section
+    assert "- `overapplied`:" in section
     assert "existing-repaired" not in section
     assert "false-positive" in section
     assert "not another required retention outcome" in section

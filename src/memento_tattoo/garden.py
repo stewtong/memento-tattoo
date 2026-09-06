@@ -41,13 +41,13 @@ def build_digest(*, root: Path, today: str, promote_threshold: int = 2, limit: i
 
     missed: dict[str, int] = {}
     for event in read_retention_events(root=root):
-        if event.get("decision") == "existing-missed":
+        if event.get("decision") == "existing-missed" and event.get("decision_source") == "author":
             note_id = event.get("cover_note_id") or event.get("covered_note_id") or event.get("note_id", "?")
             missed[note_id] = missed.get(note_id, 0) + 1
     section(
         "Repair candidates",
         [
-            f"- {note_id}: {count} missed retrieval(s) (strengthen aliases/Situation)"
+            f"- {note_id}: {count} author-recorded miss(es) (review cause before changing retrieval)"
             for note_id, count in sorted(missed.items(), key=lambda item: -item[1])
         ],
     )
@@ -57,10 +57,12 @@ def build_digest(*, root: Path, today: str, promote_threshold: int = 2, limit: i
         "Promotion candidates",
         [
             f"- {note_id} (recurred {count}x): {by_id[note_id].situation if note_id in by_id else '(note not in current files)'} -> review for tattoo"
-            for note_id, count in sorted(recurrence_counts(root=root).items(), key=lambda item: -item[1])
+            for note_id, count in sorted(recurrence_counts(root=root, observed_only=True).items(), key=lambda item: -item[1])
             if count >= promote_threshold
         ],
     )
+    legacy = [event for event in read_retention_events(root=root) if event.get("decision") in ("existing-missed", "existing-repaired") and event.get("decision_source") != "author"]
+    section("Unverified historical classifications", [f"- {len(legacy)} event(s); retained as history, excluded from observed-miss promotion counts."] if legacy else [])
     section("Tattoo merge suggestions", [])
     return "\n".join(lines)
 
@@ -70,10 +72,10 @@ def digest_counts(*, root: Path, today: str, promote_threshold: int = 2) -> dict
     events = read_retention_events(root=root)
     missed = {
         event.get("cover_note_id") or event.get("covered_note_id") or event.get("note_id")
-        for event in events if event.get("decision") == "existing-missed"
+        for event in events if event.get("decision") == "existing-missed" and event.get("decision_source") == "author"
     }
     return {
         "stale": sum(bool(note.review_after and note.review_after <= today[:10]) for note in notes),
         "repair": len(missed - {None}),
-        "promote": sum(count >= promote_threshold for count in recurrence_counts(root=root).values()),
+        "promote": sum(count >= promote_threshold for count in recurrence_counts(root=root, observed_only=True).values()),
     }

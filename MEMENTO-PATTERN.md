@@ -129,7 +129,7 @@ When the user corrects you, write a note that captures:
 
 Before writing a correction or reflection note, search existing notes for a matching lesson.
 
-If a matching lesson already existed but did not affect your action, log that as an existing-missed retrieval.
+If the session shows that a matching lesson existed but was missed, record `existing-missed` explicitly. Automatic similarity alone records `related`.
 
 When a new note relates to an existing note or tattoo, link to it by id instead of restating its lesson. Reference the prior note rather than duplicating it.
 
@@ -165,9 +165,12 @@ Record the recommendation in use. Keep the count and byte measurements visible e
 When adding a correction or reflection, classify the retrieval result:
 
 - `new`: no existing lesson covered the situation.
-- `existing-missed`: a relevant lesson existed but did not prevent the mistake.
+- `related`: automatic retrieval found a possible covering lesson.
+- `existing-missed`: the author recorded that a relevant lesson existed but did not prevent the mistake.
+- `applied`: the author recorded useful application of a lesson.
+- `overapplied`: the author recorded harmful or unnecessary application.
 
-This makes repeated correction visible. A repeat miss is not just another note. It is evidence that the lesson trigger or loading rule needs repair.
+An author-recorded miss warrants review of its cause. Similarity alone does not establish a retrieval failure.
 
 Repairing an existing note is an action after classification, not another required retention outcome. A local implementation may record false-positive analysis as separate diagnostic metadata, but it should not mix that metadata into the two-outcome retention-health denominator.
 
@@ -219,7 +222,7 @@ Use this pattern:
 - Notes are cheap lesson captures.
 - Project memory lives beside the project as a local file.
 - Tattoos are scarce promoted lessons that should be loaded before broad classes of action.
-- A retention log records whether the right lesson showed up when it mattered.
+- A retention log records write-time retrieval classifications and separately attributed author observations of missed, useful, or unnecessary lesson application.
 
 Adapt the pattern to this repo with the smallest useful implementation.
 
@@ -235,3 +238,19 @@ Verify the result through the interface the user will invoke, whether that is re
 
 Do not build a database, vector search, hosted sync, or MCP server unless the current repo clearly needs it.
 ```
+
+## Interpret evidence within its scope
+
+Automatic classification records `new` or `related`. Author judgments record their source separately. Historical events without that provenance remain unverified classifications; gardening retains their count but excludes them from observed-miss promotion counts. Citation counts establish mentions. Behavioral effectiveness requires evidence from the task. Sparse citations alone do not justify removing a rare, consequential safeguard.
+
+Use the named project's current state together with transferable lessons matching the action. Expand the search when evidence conflicts, a needed source is absent, or a consequential decision needs more support. A bounded result cannot establish absence. A newer summary does not supersede an authoritative decision merely by being newer. Preserve useful successful approaches as well as corrections.
+
+A tattoo states when its action helps and preserves necessary exceptions. Its wording must not turn a local correction into a universal restriction. Review scope, overlap, and the cost of unnecessary application before proposing it. Existing approval and candidate-parking rules still apply.
+
+## Retrieve for the action and save the actual changes
+
+Keep a short `## Current state` beside preserved project history. Retrieve that state and lessons about the intended action when they could change the decision. The reference CLI accepts `load --query "<situation and action>" --project <directory>` and includes an explicit current-state excerpt alongside ranked lessons. Scope, source and supersession remain visible. Matching suggests relevance; current user instructions and source evidence determine what applies. Widen a search when missing or conflicting evidence matters, without making retrieval a ritual on every turn.
+
+Routine saves reuse unchanged protocol context, refresh relevant shared state, and call the mechanical driver once. Broader tattoo review and historical housekeeping follow the adaptation's declared maintenance cadence. Deferred maintenance remains visible and must not be reported as completed persistence.
+
+For registry updates in the reference CLI, supply `registry_delta.expected_line` in the save JSON, or `registry-queue --expected-line`, with the exact entry read before drafting; an empty string means the entry was absent. Preflight, queue and drain check the source fingerprint, so a stale draft fails instead of overwriting another writer. Older callers remain compatible but lack this guard. A retry reuses its original receipt. Required session and registry writes still receive artifact checks; optional enrichment never substitutes for them.
