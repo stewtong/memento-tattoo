@@ -155,6 +155,8 @@ If your agent runner supports hooks, hooks can call the same CLI commands: sessi
 
 ### Current project context and guarded updates
 
+For a runnable JSON spec that saves a session, project state, and registry entry, follow [Save work with the CLI](docs/save-work.md). It includes read-back and replay commands. The [registry format](docs/concepts.md#registry-queue) shows the complete file and its entry metadata.
+
 Use `memento-tattoo load --query "<situation and action>" --project <directory>` to combine a project's explicit current-state section with relevant lessons. Historical notes remain searchable and superseded entries remain labelled. For a registry edit, copy the inspected line into `registry_delta.expected_line` in the save JSON. The driver rejects a stale draft before writing the session; drain rechecks for intervening changes. An empty expected line means the entry must be absent. See [the pattern contract](MEMENTO-PATTERN.md#retrieve-for-the-action-and-save-the-actual-changes) for scope and compatibility.
 
 ## Failure loop example
@@ -274,6 +276,7 @@ This reference implementation does not include vector search, embeddings, a data
 
 - [Canonical Memento pattern](MEMENTO-PATTERN.md)
 - [Agent instruction template](templates/AGENTS.md)
+- [Save work with the CLI](docs/save-work.md)
 - [Basic failure-loop example](examples/basic/README.md)
 - [Concepts](docs/concepts.md)
 - [Design essay](docs/essay.md)

@@ -147,7 +147,22 @@ These values are review triggers, not validity requirements or quotas. Each warn
 
 ## Registry Queue
 
-`registry.md` is an optional compact index of project summaries. Agents write registry changes through `_queue/` first:
+`registry.md` is an optional compact index of project summaries. A complete generated file looks like this:
+
+```markdown
+# Registry
+
+<!-- registry-entry slug=demo status=active updated=2026-09-05T12:00:00Z agent=codex sess=sess_abcd -->
+- Demo - ../project/ - Example saved - active
+```
+
+The heading is exactly `# Registry` and appears first, apart from blank lines. Each entry has a `registry-entry` comment immediately followed by one nonempty summary line. Keep each slug unique. The CLI generates the timestamp, session, agent, and status metadata; `status` is `active` or `archived`. Legacy entries may omit provenance fields. Additional headings, free-standing bullets, and unrelated prose are rejected when the registry is read for an update.
+
+For a new root, let `save-commit` or `registry-queue` followed by `drain` create the file. An existing empty registry can contain just `# Registry` and a newline. Use [the save walkthrough](save-work.md) to create an entry and replay the save.
+
+For a guarded update, read the current file and copy only the summary line, including its leading `- `, into `registry_delta.expected_line`. Put the replacement summary in `registry_delta.line`. Use an empty expected line only when that slug is absent; omitting the field disables the guard. Registry summaries are stored as text: their paths are reader-facing references, not directories that drain opens or validates.
+
+Agents write registry changes through `_queue/` first. A queued delta has a different marker from a stored entry:
 
 ```markdown
 <!-- registry-delta sess=sess_abcd action=update slug=memento-oss agent=codex ts=2026-06-17T18:24:58Z -->
@@ -161,6 +176,8 @@ These values are review triggers, not validity requirements or quotas. Each warn
 ## Save Commit
 
 `save-commit --spec <json>` is the preferred driver when one session updates several surfaces. It validates the submitted schema before writing, then calls the same lower-level commands for sessions, notes, tattoos, project memory, registry queue/drain, and rebuild.
+
+[Save work with the CLI](save-work.md) provides a complete runnable spec, the required field types, and persistence and replay checks.
 
 It is not a transaction. If a later verification fails, earlier durable writes remain in place and are reported in the result.
 

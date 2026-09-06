@@ -32,6 +32,7 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert (export_root / "docs/authoring-standards.md").exists()
     assert {path.name for path in (export_root / "docs").iterdir()} == {
         "concepts.md",
+        "save-work.md",
         "essay.md",
         "authoring-standards.md",
         "memento-tattoo-demo.html",

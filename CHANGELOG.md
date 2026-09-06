@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Adds a runnable save JSON walkthrough and the complete registry-file format, with guarded-update and replay guidance.
 - Recovers interrupted retention rotation without counting copied events twice; gives new events distinct identities.
 - Verifies registry save ownership, applied receipt, status, and exact line; rejects malformed existing registry content before rewriting.
 - Verifies replayed notes in their actual archive location and rejects unsupported retention judgments on pattern notes.
