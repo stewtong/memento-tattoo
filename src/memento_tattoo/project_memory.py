@@ -129,3 +129,23 @@ def section_changed_since(section_text: str, flow_start: str | None) -> bool:
         if marker_dt >= flow_dt:
             return True
     return False
+
+
+STATE_HEADINGS = ("## Current state", "## State")
+
+
+def default_state_section(project: Path) -> str:
+    """The current-state heading already used in a project's memory.md.
+
+    New files from ``init`` use "## Current state"; older files and
+    ``ensure_project_memory`` use "## State". Editing the heading the file
+    already has keeps one current-state section, which is the one recall reads.
+    """
+    path = Path(project) / "memory.md"
+    if path.is_file():
+        headings = {line.strip() for line in path.read_text(encoding="utf-8").splitlines()}
+        for heading in STATE_HEADINGS:
+            if heading in headings:
+                return heading
+    return "## State"
+

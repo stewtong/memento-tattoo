@@ -1,0 +1,168 @@
+[
+  {
+    "id": "plural-migration",
+    "query": "run a migration on billing",
+    "phase": "now",
+    "top": 3,
+    "must_include": [
+      "synth.note.plural01"
+    ],
+    "why": "A singular query finds a plural note; substring matching already does this, so it guards against regression."
+  },
+  {
+    "id": "plural-policy",
+    "query": "change a retry policy",
+    "phase": "now",
+    "top": 3,
+    "must_include": [
+      "synth.note.plural02"
+    ],
+    "why": "Substring matching already finds 'policy' inside 'policy file'; kept as a regression guard."
+  },
+  {
+    "id": "plural-dependency",
+    "query": "add a dependency to a package",
+    "phase": "now",
+    "top": 3,
+    "must_include": [
+      "synth.note.plural03"
+    ],
+    "why": "Found today through other terms; guards against regression."
+  },
+  {
+    "id": "plural-query-singular-note",
+    "query": "rollbacks",
+    "phase": "w4",
+    "fixed_by": "tokenizer",
+    "top": 3,
+    "must_include": [
+      "synth.note.plural04"
+    ],
+    "why": "A plural query must match a singular note, which substring matching cannot do."
+  },
+  {
+    "id": "flood-ledger",
+    "query": "agent run test ledger",
+    "phase": "w4",
+    "fixed_by": "bm25",
+    "top": 1,
+    "must_include": [
+      "synth.note.rare01"
+    ],
+    "why": "One rare term must outweigh three common ones; fixed bonuses per matched term cannot."
+  },
+  {
+    "id": "substring-art",
+    "query": "art",
+    "phase": "w4",
+    "fixed_by": "tokenizer",
+    "top": 5,
+    "must_include": [
+      "synth.note.substr01"
+    ],
+    "must_exclude_any_other_than": [
+      "synth.note.substr01"
+    ],
+    "why": "'art' must not match 'start', 'part' or 'restart'."
+  },
+  {
+    "id": "substring-log",
+    "query": "log",
+    "phase": "w4",
+    "fixed_by": "tokenizer",
+    "top": 5,
+    "must_include": [
+      "synth.note.substr02"
+    ],
+    "max_results": 3,
+    "why": "'log' must not match 'catalog', 'login' or 'blog'."
+  },
+  {
+    "id": "rare-term-ledger",
+    "query": "agent changed rounding in the ledger",
+    "phase": "now",
+    "top": 1,
+    "must_include": [
+      "synth.note.rare01"
+    ],
+    "why": "Rare terms ('ledger', 'rounding') must outweigh common ones ('agent', 'changed')."
+  },
+  {
+    "id": "rare-term-docs",
+    "query": "ran the whole test suite for a docs change",
+    "phase": "now",
+    "top": 3,
+    "must_include": [
+      "synth.note.rare02"
+    ],
+    "why": "Common words ('test', 'run') appear in many distractors."
+  },
+  {
+    "id": "superseded-order",
+    "query": "rotate the payments api key",
+    "phase": "now",
+    "top": 2,
+    "order": [
+      "synth.note.sup01new",
+      "synth.note.sup01old"
+    ],
+    "why": "The successor must rank above the note it supersedes."
+  },
+  {
+    "id": "archived-found",
+    "query": "upgrade the bundler major version",
+    "phase": "now",
+    "top": 3,
+    "must_include": [
+      "synth.note.arch01"
+    ],
+    "why": "Archived notes stay searchable."
+  },
+  {
+    "id": "flagship-callers",
+    "query": "rename an exported function in a shared package",
+    "phase": "now",
+    "top": 3,
+    "must_include": [
+      "synth.note.mono01"
+    ],
+    "why": "The flagship lesson must surface for a paraphrased API change."
+  },
+  {
+    "id": "scope-billing",
+    "query": "handler returns an error after committing",
+    "path": "packages/billing/src/webhooks/refund.ts",
+    "phase": "w7",
+    "top": 3,
+    "must_include": [
+      "synth.note.scope01"
+    ],
+    "must_exclude": [
+      "synth.note.scope02"
+    ],
+    "why": "In-scope notes are boosted; notes scoped only to other paths are dropped."
+  },
+  {
+    "id": "scope-web",
+    "query": "import the billing package from a route",
+    "path": "apps/web/routes/checkout.ts",
+    "phase": "w7",
+    "top": 3,
+    "must_include": [
+      "synth.note.scope02"
+    ],
+    "why": "The scoped rule for apps/web applies."
+  },
+  {
+    "id": "path-chain",
+    "query": "anything",
+    "path": "packages/billing/src/invoice.ts",
+    "phase": "w7",
+    "current_state_chain": [
+      "packages/billing/memory.md",
+      "packages/memory.md",
+      "memory.md"
+    ],
+    "why": "load --path returns each memory.md current state from nearest to the root."
+  }
+]

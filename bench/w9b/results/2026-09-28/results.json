@@ -1,0 +1,775 @@
+{
+ "agent_level": {
+  "arms": {
+   "bm25": {
+    "ci95": [
+     0.38,
+     0.66
+    ],
+    "n": 50,
+    "per_repo": {
+     "prometheus/prometheus": {
+      "n": 50,
+      "raised_point_rate": 0.52
+     }
+    },
+    "raised_point_rate": 0.52,
+    "reason_compatible_rate": 0.475,
+    "reason_queries": 40,
+    "tokens_mean": 906.7,
+    "tokens_median": 773.0
+   },
+   "curated_file": {
+    "ci95": [
+     0.38,
+     0.66
+    ],
+    "n": 50,
+    "per_repo": {
+     "prometheus/prometheus": {
+      "n": 50,
+      "raised_point_rate": 0.52
+     }
+    },
+    "raised_point_rate": 0.52,
+    "reason_compatible_rate": 0.55,
+    "reason_queries": 40,
+    "tokens_mean": 1974.4,
+    "tokens_median": 1967.0
+   },
+   "embeddings": {
+    "ci95": [
+     0.4,
+     0.68
+    ],
+    "n": 50,
+    "per_repo": {
+     "prometheus/prometheus": {
+      "n": 50,
+      "raised_point_rate": 0.54
+     }
+    },
+    "raised_point_rate": 0.54,
+    "reason_compatible_rate": 0.55,
+    "reason_queries": 40,
+    "tokens_mean": 548.1,
+    "tokens_median": 518.0
+   },
+   "long_file": {
+    "ci95": [
+     0.4,
+     0.68
+    ],
+    "n": 50,
+    "per_repo": {
+     "prometheus/prometheus": {
+      "n": 50,
+      "raised_point_rate": 0.54
+     }
+    },
+    "raised_point_rate": 0.54,
+    "reason_compatible_rate": 0.525,
+    "reason_queries": 40,
+    "tokens_mean": 8008.2,
+    "tokens_median": 8143.5
+   },
+   "memento_lexical": {
+    "ci95": [
+     0.4,
+     0.68
+    ],
+    "n": 50,
+    "per_repo": {
+     "prometheus/prometheus": {
+      "n": 50,
+      "raised_point_rate": 0.54
+     }
+    },
+    "raised_point_rate": 0.54,
+    "reason_compatible_rate": 0.525,
+    "reason_queries": 40,
+    "tokens_mean": 905.2,
+    "tokens_median": 767.5
+   },
+   "no_memory": {
+    "ci95": [
+     0.36,
+     0.64
+    ],
+    "n": 50,
+    "per_repo": {
+     "prometheus/prometheus": {
+      "n": 50,
+      "raised_point_rate": 0.5
+     }
+    },
+    "raised_point_rate": 0.5,
+    "reason_compatible_rate": 0.475,
+    "reason_queries": 40,
+    "tokens_mean": 0.0,
+    "tokens_median": 0.0
+   }
+  },
+  "comparisons": {
+   "bm25": {
+    "ci95": [
+     -0.04,
+     0.08
+    ],
+    "decision": "no advantage",
+    "difference": 0.02,
+    "paired_queries": 50,
+    "per_repo_difference": {
+     "prometheus/prometheus": 0.02
+    }
+   },
+   "curated_file": {
+    "ci95": [
+     -0.12,
+     0.14
+    ],
+    "decision": "no advantage",
+    "difference": 0.02,
+    "paired_queries": 50,
+    "per_repo_difference": {
+     "prometheus/prometheus": 0.02
+    }
+   },
+   "embeddings": {
+    "ci95": [
+     -0.06,
+     0.06
+    ],
+    "decision": "no advantage",
+    "difference": 0.0,
+    "paired_queries": 50,
+    "per_repo_difference": {
+     "prometheus/prometheus": 0.0
+    }
+   },
+   "long_file": {
+    "ci95": [
+     -0.12,
+     0.1
+    ],
+    "decision": "no advantage",
+    "difference": 0.0,
+    "paired_queries": 50,
+    "per_repo_difference": {
+     "prometheus/prometheus": 0.0
+    }
+   },
+   "no_memory": {
+    "ci95": [
+     0.0,
+     0.1
+    ],
+    "decision": "no advantage",
+    "difference": 0.04,
+    "paired_queries": 50,
+    "per_repo_difference": {
+     "prometheus/prometheus": 0.04
+    }
+   }
+  },
+  "missing_results": {
+   "bm25": 0,
+   "curated_file": 0,
+   "embeddings": 0,
+   "long_file": 0,
+   "memento_lexical": 0,
+   "no_memory": 0
+  },
+  "power": {
+   "alpha_two_sided": 0.05,
+   "mdd_at_assumed_discordance": {
+    "0.20": 0.173,
+    "0.30": 0.2119,
+    "0.40": 0.2447
+   },
+   "mdd_at_observed_discordance": 0.1815,
+   "method": "Connor (1987) McNemar sample size, inverted (power.py)",
+   "observed_discordance": 0.22,
+   "paired_queries": 50,
+   "per_repo": {
+    "prometheus/prometheus": 50
+   },
+   "power": 0.8
+  },
+  "sampled_queries": 50
+ },
+ "bootstrap": {
+  "rounds": 10000,
+  "seed": 20260927,
+  "stratified_by": "repository"
+ },
+ "excluded_repositories": {
+  "django/django": "no yield output (queries.jsonl)"
+ },
+ "label_checks": {
+  "prometheus/prometheus": [
+   {
+    "agreement_different": 1.0,
+    "note": "first check; failed; then used as the tuning set",
+    "passes": false,
+    "population_weighted_accuracy": 0.9709,
+    "precision_same": 0.52,
+    "round": 1,
+    "version": "pair-v1"
+   },
+   {
+    "agreement_different": 0.99,
+    "note": null,
+    "passes": false,
+    "population_weighted_accuracy": 0.9749,
+    "precision_same": 0.69,
+    "round": 2,
+    "version": "pair-v3"
+   },
+   {
+    "agreement_different": 1.0,
+    "note": null,
+    "passes": true,
+    "population_weighted_accuracy": 0.997,
+    "precision_same": 0.91,
+    "round": 3,
+    "version": "pair-v3"
+   }
+  ]
+ },
+ "not_run": {
+  "memento_paths": "paths scoping not built yet; runs when it ships (spec changelog)"
+ },
+ "provenance": {
+  "agent_and_grader": {
+   "cli": "claude -p",
+   "grade_version": "gr1",
+   "model_alias": "opus",
+   "review_version": "r1"
+  },
+  "inference_provider_labelers": "https://api.tokenfactory.us-north1.nebius.com",
+  "labelers": {
+   "prometheus/prometheus": {
+    "confirmer": "gpt-6-astra",
+    "labeler": "zai-org/GLM-5.3-Flash",
+    "params": {
+     "reasoning_effort": "low"
+    },
+    "situations": {
+     "labeler": "zai-org/GLM-5.3-Flash",
+     "version": "situation-v1"
+    },
+    "version": "pair-v3"
+   }
+  },
+  "memento_tattoo_version": "0.4.0",
+  "prompt_versions": {
+   "label": "pair-v3",
+   "pair": "pair-v3",
+   "situation": "situation-v1"
+  }
+ },
+ "repositories": [
+  "prometheus/prometheus"
+ ],
+ "retrieval_level": {
+  "arms": {
+   "bm25": {
+    "after_2026-07-01": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.0192,
+         0.1923
+        ],
+        "mean": 0.0962
+       },
+       "mrr": {
+        "ci95": [
+         0.0286,
+         0.1723
+        ],
+        "mean": 0.092
+       },
+       "n": 52,
+       "recall@5": {
+        "ci95": [
+         0.0192,
+         0.1692
+        ],
+        "mean": 0.0885
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.0192,
+        0.1923
+       ],
+       "mean": 0.0962
+      },
+      "mrr": {
+       "ci95": [
+        0.0286,
+        0.1723
+       ],
+       "mean": 0.092
+      },
+      "n": 52,
+      "recall@5": {
+       "ci95": [
+        0.0192,
+        0.1692
+       ],
+       "mean": 0.0885
+      }
+     }
+    },
+    "all": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.1254,
+         0.2115
+        ],
+        "mean": 0.1649
+       },
+       "mrr": {
+        "ci95": [
+         0.0847,
+         0.1499
+        ],
+        "mean": 0.1155
+       },
+       "n": 279,
+       "recall@5": {
+        "ci95": [
+         0.1129,
+         0.193
+        ],
+        "mean": 0.1507
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.1254,
+        0.2115
+       ],
+       "mean": 0.1649
+      },
+      "mrr": {
+       "ci95": [
+        0.0847,
+        0.1499
+       ],
+       "mean": 0.1155
+      },
+      "n": 279,
+      "recall@5": {
+       "ci95": [
+        0.1129,
+        0.193
+       ],
+       "mean": 0.1507
+      }
+     }
+    },
+    "before_2026-07-01": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.1322,
+         0.2335
+        ],
+        "mean": 0.1806
+       },
+       "mrr": {
+        "ci95": [
+         0.0864,
+         0.1583
+        ],
+        "mean": 0.1209
+       },
+       "n": 227,
+       "recall@5": {
+        "ci95": [
+         0.1191,
+         0.2137
+        ],
+        "mean": 0.1649
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.1322,
+        0.2335
+       ],
+       "mean": 0.1806
+      },
+      "mrr": {
+       "ci95": [
+        0.0864,
+        0.1583
+       ],
+       "mean": 0.1209
+      },
+      "n": 227,
+      "recall@5": {
+       "ci95": [
+        0.1191,
+        0.2137
+       ],
+       "mean": 0.1649
+      }
+     }
+    }
+   },
+   "embeddings": {
+    "after_2026-07-01": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.0,
+         0.1346
+        ],
+        "mean": 0.0577
+       },
+       "mrr": {
+        "ci95": [
+         0.0081,
+         0.1113
+        ],
+        "mean": 0.0517
+       },
+       "n": 52,
+       "recall@5": {
+        "ci95": [
+         0.0,
+         0.1346
+        ],
+        "mean": 0.0577
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.0,
+        0.1346
+       ],
+       "mean": 0.0577
+      },
+      "mrr": {
+       "ci95": [
+        0.0081,
+        0.1113
+       ],
+       "mean": 0.0517
+      },
+      "n": 52,
+      "recall@5": {
+       "ci95": [
+        0.0,
+        0.1346
+       ],
+       "mean": 0.0577
+      }
+     }
+    },
+    "all": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.0323,
+         0.086
+        ],
+        "mean": 0.0573
+       },
+       "mrr": {
+        "ci95": [
+         0.0268,
+         0.0692
+        ],
+        "mean": 0.0474
+       },
+       "n": 279,
+       "recall@5": {
+        "ci95": [
+         0.0281,
+         0.0771
+        ],
+        "mean": 0.0514
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.0323,
+        0.086
+       ],
+       "mean": 0.0573
+      },
+      "mrr": {
+       "ci95": [
+        0.0268,
+        0.0692
+       ],
+       "mean": 0.0474
+      },
+      "n": 279,
+      "recall@5": {
+       "ci95": [
+        0.0281,
+        0.0771
+       ],
+       "mean": 0.0514
+      }
+     }
+    },
+    "before_2026-07-01": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.0308,
+         0.0881
+        ],
+        "mean": 0.0573
+       },
+       "mrr": {
+        "ci95": [
+         0.0241,
+         0.0706
+        ],
+        "mean": 0.0465
+       },
+       "n": 227,
+       "recall@5": {
+        "ci95": [
+         0.0242,
+         0.0786
+        ],
+        "mean": 0.0499
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.0308,
+        0.0881
+       ],
+       "mean": 0.0573
+      },
+      "mrr": {
+       "ci95": [
+        0.0241,
+        0.0706
+       ],
+       "mean": 0.0465
+      },
+      "n": 227,
+      "recall@5": {
+       "ci95": [
+        0.0242,
+        0.0786
+       ],
+       "mean": 0.0499
+      }
+     }
+    }
+   },
+   "memento_lexical": {
+    "after_2026-07-01": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.0577,
+         0.2308
+        ],
+        "mean": 0.1346
+       },
+       "mrr": {
+        "ci95": [
+         0.0264,
+         0.1375
+        ],
+        "mean": 0.0747
+       },
+       "n": 52,
+       "recall@5": {
+        "ci95": [
+         0.0423,
+         0.2231
+        ],
+        "mean": 0.1269
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.0577,
+        0.2308
+       ],
+       "mean": 0.1346
+      },
+      "mrr": {
+       "ci95": [
+        0.0264,
+        0.1375
+       ],
+       "mean": 0.0747
+      },
+      "n": 52,
+      "recall@5": {
+       "ci95": [
+        0.0423,
+        0.2231
+       ],
+       "mean": 0.1269
+      }
+     }
+    },
+    "all": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.129,
+         0.2115
+        ],
+        "mean": 0.1685
+       },
+       "mrr": {
+        "ci95": [
+         0.081,
+         0.1427
+        ],
+        "mean": 0.1103
+       },
+       "n": 279,
+       "recall@5": {
+        "ci95": [
+         0.1159,
+         0.1955
+        ],
+        "mean": 0.1548
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.129,
+        0.2115
+       ],
+       "mean": 0.1685
+      },
+      "mrr": {
+       "ci95": [
+        0.081,
+        0.1427
+       ],
+       "mean": 0.1103
+      },
+      "n": 279,
+      "recall@5": {
+       "ci95": [
+        0.1159,
+        0.1955
+       ],
+       "mean": 0.1548
+      }
+     }
+    },
+    "before_2026-07-01": {
+     "per_repo": {
+      "prometheus/prometheus": {
+       "hit@5": {
+        "ci95": [
+         0.1278,
+         0.2247
+        ],
+        "mean": 0.1762
+       },
+       "mrr": {
+        "ci95": [
+         0.0853,
+         0.1561
+        ],
+        "mean": 0.1184
+       },
+       "n": 227,
+       "recall@5": {
+        "ci95": [
+         0.1175,
+         0.2075
+        ],
+        "mean": 0.1612
+       }
+      }
+     },
+     "pooled": {
+      "hit@5": {
+       "ci95": [
+        0.1278,
+        0.2247
+       ],
+       "mean": 0.1762
+      },
+      "mrr": {
+       "ci95": [
+        0.0853,
+        0.1561
+       ],
+       "mean": 0.1184
+      },
+      "n": 227,
+      "recall@5": {
+       "ci95": [
+        0.1175,
+        0.2075
+       ],
+       "mean": 0.1612
+      }
+     }
+    }
+   }
+  },
+  "queries": {
+   "prometheus/prometheus": {
+    "queries": 279,
+    "skipped_no_visible_relevant": 0
+   }
+  }
+ },
+ "sample": {
+  "counts": {
+   "prometheus/prometheus": 50
+  },
+  "eligible": {
+   "prometheus/prometheus": 52
+  },
+  "excluded": {
+   "django/django": "no yield output (queries.jsonl)"
+  },
+  "sha256": "86b2e7280f10d2c1c72ace308d8b8dc8c8b3cd429603ca25762a4f482e396435",
+  "shortfalls": {},
+  "unfilled": 0
+ },
+ "scored_at": "2026-09-28T06:25:15+00:00",
+ "spec": "bench/w9b/README.md (frozen 2026-09-27)"
+}

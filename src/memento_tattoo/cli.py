@@ -6,7 +6,10 @@ import math
 from pathlib import Path
 from typing import Optional
 
+from . import __version__
 from .doctor import (
+    DEFAULT_TATTOO_REASON_WARN,
+    DEFAULT_WHY_COVERAGE_WARN,
     RECOMMENDED_ALIAS_COVERAGE_PERCENT,
     RECOMMENDED_TATTOO_BYTES,
     RECOMMENDED_TATTOO_COUNT,
@@ -15,6 +18,7 @@ from .doctor import (
 )
 from .garden import DEFAULT_DIGEST_LIMIT, build_digest
 from ._time import now_iso
+from .project_memory import default_state_section
 from .recall import render_ranked_notes
 from .retention import DECISIONS
 from .tattoo_audit import tattoo_audit_report
@@ -23,6 +27,7 @@ from .write_through import note_add, project_edit, tattoo_add
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="memento-tattoo", description="File-based lesson-retention memory for LLM agents.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--root", default=None, help="memento root; defaults to ./memento")
     parser.add_argument("--agent", default=None, help="agent id for provenance; defaults to MEMENTO_AGENT or unknown")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -34,6 +39,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     note.add_argument("--decision", choices=DECISIONS, default=None, help="override the checked retrieval decision")
     note.add_argument("--covered-note-id", default=None, help="existing lesson note id this note should have matched")
     note.add_argument("text")
+
+    entry = subparsers.add_parser("entry-read", help="read one complete source-scoped memory entry")
+    entry.add_argument("--id", default=None)
+    entry.add_argument("--source", default=None, help="exact store path, or path relative to the memory root")
+    entry.add_argument("--project", action="append", default=[], help="explicit project directory to include")
+    entry.add_argument("--format", choices=["json", "markdown"], default="json")
+
+    amend = subparsers.add_parser("note-amend", help="revise an ordinary note with a digest guard and visible history")
+    amend.add_argument("--id", required=True)
+    amend.add_argument("--source", default=None)
+    amend.add_argument("--expected-sha256", required=True)
+    amend.add_argument("--sess", required=True)
+    amend.add_argument("--author", required=True)
+    amend.add_argument("--reason", required=True)
+    amend.add_argument("--evidence", required=True, help="source reference supporting the editorial change")
+    amend.add_argument("text", help="complete replacement active note body, without creation marker or history")
 
     tattoo = subparsers.add_parser("tattoo-add", help="append a promoted lesson")
     tattoo.add_argument("--sess", required=True)
@@ -47,7 +68,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     project = subparsers.add_parser("project-edit", help="update adjacent project memory.md")
     project.add_argument("--project", required=True, help="project directory that owns memory.md")
     project.add_argument("--sess", required=True)
-    project.add_argument("--section", default="## State")
+    project.add_argument("--section", default=None, help="h2 section to edit; defaults to the file's existing current-state heading ('## Current state' or '## State')")
     project.add_argument("--flow-start", default=None)
     project_mode = project.add_mutually_exclusive_group()
     project_mode.add_argument("--append", action="store_true", help="append this body to an accumulating section")
@@ -70,6 +91,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     doctor.add_argument("--tattoo-count-warn", type=_nonnegative_int, default=RECOMMENDED_TATTOO_COUNT, metavar="COUNT")
     doctor.add_argument("--tattoo-bytes-warn", type=_nonnegative_int, default=RECOMMENDED_TATTOO_BYTES, metavar="BYTES")
     doctor.add_argument("--tattoo-length-warn", type=_nonnegative_int, default=RECOMMENDED_TATTOO_LENGTH, metavar="CHARS")
+    doctor.add_argument(
+        "--why-coverage-warn",
+        type=_nonnegative_float,
+        default=DEFAULT_WHY_COVERAGE_WARN,
+        metavar="PERCENT",
+        help="warn when hot or archived Why: coverage is below PERCENT; 0 (default) reports only",
+    )
+    doctor.add_argument(
+        "--tattoo-reason-warn",
+        type=_nonnegative_float,
+        default=DEFAULT_TATTOO_REASON_WARN,
+        metavar="PERCENT",
+        help="warn when reason-clause coverage of tattoos is below PERCENT; 0 (default) reports only",
+    )
+
+    init = subparsers.add_parser("init", help="create a memory root, install PROTOCOL.md, and print the instruction stub")
+    init.add_argument("--root", dest="init_root", default=None, help="memento root; same as the global --root")
+    init.add_argument("--project", default=None, help="directory for project memory.md; defaults to the current directory when it contains the root, otherwise the root's parent")
+    init.add_argument("--adapter", choices=["generic", "skill", "claude-md-import"], default="generic")
+    init.add_argument("--dir", dest="skill_dir", default=None, help="skills directory for --adapter skill; defaults to .agents/skills")
+    init.add_argument("--write", action="store_true", help="with --adapter claude-md-import, create CLAUDE.md when it is absent")
 
     subparsers.add_parser("new-id", help="generate and reserve a collision-safe session id")
 
@@ -123,25 +165,80 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
     root = Path(args.root).resolve() if args.root else Path.cwd() / "memento"
 
+    if args.command == "init":
+        from .init import run_init
+
+        init_root = Path(args.init_root).resolve() if args.init_root else root
+        if args.skill_dir is not None and args.adapter != "skill":
+            print("error: --dir applies only to --adapter skill")
+            return 2
+        if args.write and args.adapter != "claude-md-import":
+            print("error: --write applies only to --adapter claude-md-import")
+            return 2
+        try:
+            result = run_init(
+                init_root,
+                project=Path(args.project) if args.project else None,
+                adapter=args.adapter,
+                skill_dir=Path(args.skill_dir) if args.skill_dir else None,
+                write_claude_md=args.write,
+            )
+        except (ValueError, OSError) as exc:
+            print(f"error: {exc}")
+            return 2
+        print("\n".join(result.lines))
+        return 0
+
+    if args.command == "entry-read":
+        from .entries import resolve_entry, render_markdown
+        try:
+            result = resolve_entry(args.id, root=root, source=args.source, projects=[Path(p) for p in args.project])
+            output = render_markdown(result) if args.format == "markdown" else json.dumps(result.record(), ensure_ascii=False, indent=2)
+        except (ValueError, OSError) as exc:
+            print(f"error: {exc}")
+            return 2
+        print(output)
+        return 0
+
+    if args.command == "note-amend":
+        from .entries import amend_note
+        try:
+            applied, result = amend_note(args.id, args.text, root=root, source=args.source,
+                expected_sha256=args.expected_sha256, sess=args.sess, author=args.author,
+                reason=args.reason, evidence=args.evidence)
+        except (ValueError, OSError) as exc:
+            print(f"error: {exc}")
+            return 2
+        print(json.dumps({"applied": applied, **result.record()}, ensure_ascii=False, indent=2))
+        return 0
+
     if args.command == "note-add":
         if args.kind in ("seed", "pattern") and (args.decision is not None or args.covered_note_id is not None):
             print("error: retention overrides require correction or reflection notes")
             return 2
-        applied, marker = note_add(
-            args.text,
-            sess=args.sess,
-            root=root,
-            kind=args.kind,
-            agent=args.agent,
-            author=args.author,
-            decision=args.decision,
-            covered_note_id=args.covered_note_id,
-        )
+        try:
+            applied, marker = note_add(
+                args.text,
+                sess=args.sess,
+                root=root,
+                kind=args.kind,
+                agent=args.agent,
+                author=args.author,
+                decision=args.decision,
+                covered_note_id=args.covered_note_id,
+            )
+        except (ValueError, OSError) as exc:
+            print(f"error: {exc}")
+            return 2
         print(f"{'applied' if applied else 'skipped (already applied)'} {marker}")
         return 0
 
     if args.command == "tattoo-add":
-        applied, marker = tattoo_add(args.text, sess=args.sess, root=root, agent=args.agent)
+        try:
+            applied, marker = tattoo_add(args.text, sess=args.sess, root=root, agent=args.agent)
+        except (ValueError, OSError) as exc:
+            print(f"error: {exc}")
+            return 2
         print(f"{'applied' if applied else 'skipped (already applied)'} {marker}")
         return 0
 
@@ -153,7 +250,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 sess=args.sess,
                 root=root,
                 project=Path(args.project),
-                section=args.section,
+                section=args.section or default_state_section(Path(args.project)),
                 flow_start=args.flow_start,
                 agent=args.agent,
                 mode=mode,
@@ -165,7 +262,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.command == "load":
-        print(render_ranked_notes(args.query, root=root, limit=args.limit, projects=[Path(item) for item in args.project]))
+        try:
+            print(render_ranked_notes(args.query, root=root, limit=args.limit, projects=[Path(item) for item in args.project]))
+        except (ValueError, OSError) as exc:
+            print(f"error: {exc}")
+            return 2
         return 0
 
     if args.command == "tattoo-audit":
@@ -184,6 +285,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             tattoo_count_warn=args.tattoo_count_warn,
             tattoo_bytes_warn=args.tattoo_bytes_warn,
             tattoo_length_warn=args.tattoo_length_warn,
+            why_coverage_warn=args.why_coverage_warn,
+            tattoo_reason_warn=args.tattoo_reason_warn,
         )
         print(output)
         return 0 if ok else 1
@@ -211,10 +314,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                 insights=args.insights,
                 files=_semi_arg(args.files),
             )
-        except ValueError as exc:
+            path = write_session_block(root, block, args.sess)
+        except (ValueError, FileExistsError) as exc:
             print(f"error: {exc}")
             return 2
-        path = write_session_block(root, block, args.sess)
         prune_reservations(root)
         print(f"applied {path}")
         return 0

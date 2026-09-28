@@ -10,7 +10,8 @@ from .rebuild import rebuild
 from .registry import drain, registry_queue, slugify, registry_receipt, validate_registry_delta, _parse_registry, _archive_line, preflight_registry, expected_line_hash
 from .lock import memory_lock
 from .retention import DECISIONS
-from .session_store import render_session_block, write_session_block, load_sessions
+from .session_store import render_session_block, write_session_block, load_sessions, validate_session_destination
+from .project_memory import default_state_section
 from .write_through import note_add, project_edit, tattoo_add
 
 
@@ -92,7 +93,7 @@ def save_commit(
             insights=session["insights"],
             files=session["files"],
         )
-        existing_path = paths.sessions / f"{sess}.md"
+        existing_path = validate_session_destination(paths.root, sess)
         if existing_path.exists() and existing_path.read_text(encoding="utf-8") != block:
             raise FileExistsError(f"session file already exists with different content: {existing_path}")
         if registry_spec and any(record.sess == sess for record in load_sessions(paths.root)):
@@ -105,6 +106,16 @@ def save_commit(
                     raise ValueError("registry operation was superseded; review current state and use a new session")
         if registry_spec:
             preflight_registry(paths.root, sess, registry_spec["action"], registry_spec["slug"], registry_spec["line"], registry_spec.get("expected_line"))
+        project_spec = spec.get("project_edit")
+        if project_spec:
+            project_edit(
+                project_spec["body"], sess=sess, root=paths.root,
+                project=_project_path(paths.root, project_spec["project"]),
+                section=project_spec.get("section") or default_state_section(_project_path(paths.root, project_spec["project"])),
+                flow_start=project_spec.get("flow_start"), agent=agent,
+                mode=project_spec.get("mode", "auto"), prepare_only=True,
+                require_receipt=any(record.sess == sess for record in load_sessions(paths.root)),
+            )
         session_path = write_session_block(paths.root, block, sess)
         if session_path.read_text(encoding="utf-8") != block:
             raise RuntimeError("session verification failed")
@@ -144,7 +155,7 @@ def save_commit(
                 sess=sess,
                 root=paths.root,
                 project=project_path,
-                section=project_spec.get("section", "## State"),
+                section=project_spec.get("section") or default_state_section(project_path),
                 flow_start=project_spec.get("flow_start"),
                 agent=agent,
                 mode=project_spec.get("mode", "auto"),

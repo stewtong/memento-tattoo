@@ -8,6 +8,7 @@ from typing import Iterable, Optional
 
 PUBLIC_ENTRIES = (
     ".github",
+    "bench",
     "scripts",
     "src",
     "tests",
@@ -21,6 +22,7 @@ PUBLIC_ENTRIES = (
     "pyproject.toml",
     "MANIFEST.in",
     "CONTRIBUTING.md",
+    "SECURITY.md",
     "CHANGELOG.md",
 )
 
@@ -56,7 +58,7 @@ def export_public(destination: Path, *, source_root: Optional[Path] = None) -> s
             shutil.copytree(
                 src,
                 dst,
-                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info", "memory-layer-judgment-spec.md"),
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"),
             )
             copied.update(_relative_files(dst, destination))
         else:

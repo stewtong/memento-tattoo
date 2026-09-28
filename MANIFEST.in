@@ -3,9 +3,11 @@ include MEMENTO-PATTERN.md
 include LICENSE
 include pyproject.toml
 include CONTRIBUTING.md
+include SECURITY.md
 include CHANGELOG.md
 include .gitignore
 recursive-include src *.py
+recursive-include src/memento_tattoo/templates *.md
 recursive-include tests *.py
 recursive-include tests/fixtures *.md
 recursive-include examples *.md *.jsonl
@@ -17,12 +19,13 @@ prune .tmp
 prune dist
 prune build
 prune plans
+prune bench
+prune evidence
 prune research
 prune specs
 exclude memory.md
 exclude IDEA.md
 exclude memento-tattoo-README-draft.md
-exclude docs/memory-layer-judgment-spec.md
 global-exclude __pycache__
 global-exclude *.py[cod]
 global-exclude .DS_Store

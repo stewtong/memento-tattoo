@@ -255,6 +255,8 @@ def test_cli_doctor_wires_threshold_flags(tmp_path: Path, capsys, monkeypatch):
         "tattoo_count_warn": 20,
         "tattoo_bytes_warn": 6000,
         "tattoo_length_warn": 250,
+        "why_coverage_warn": 0,
+        "tattoo_reason_warn": 0,
     }
     assert capsys.readouterr().out.strip() == "ok"
 

@@ -32,6 +32,7 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert (export_root / "docs/authoring-standards.md").exists()
     assert {path.name for path in (export_root / "docs").iterdir()} == {
         "concepts.md",
+        "roadmap.md",
         "save-work.md",
         "essay.md",
         "authoring-standards.md",
@@ -40,7 +41,12 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     }
     assert {path.name for path in (export_root / "templates").iterdir()} == {
         "AGENTS.md",
+        "PROTOCOL.md",
+        "memento-stub.md",
     }
+    assert (export_root / "src/memento_tattoo/templates/PROTOCOL.md").exists()
+    assert (export_root / "src/memento_tattoo/templates/memento-stub.md").exists()
+    assert not [path for path in export_root.rglob("memory-layer-judgment-spec.md")]
     assert (export_root / "scripts/export_public.py").exists()
     assert (export_root / "src/memento_tattoo/agent.py").exists()
     assert (export_root / "src/memento_tattoo/new_id.py").exists()
@@ -59,6 +65,10 @@ def test_public_export_contains_only_release_surface(tmp_path: Path):
     assert (export_root / "tests/test_save_commit.py").exists()
     assert (export_root / "tests/test_concurrent_saves.py").exists()
     assert (export_root / "tests/test_tattoo_firing.py").exists()
+    assert (export_root / "SECURITY.md").exists()
+    assert (export_root / "bench/w9b/RESULTS.md").exists()
+    assert (export_root / "bench/w9b/results/2026-09-28/results.json").exists()
+    assert not (export_root / "evidence").exists()
     assert "memory.md" not in copied
     assert not (export_root / "memory.md").exists()
     assert not (export_root / "memento-tattoo-README-draft.md").exists()
@@ -81,4 +91,26 @@ def test_packaging_declares_installed_contract_and_template_locations():
 
     assert '[tool.setuptools.data-files]' in pyproject
     assert '"share/memento-tattoo" = ["MEMENTO-PATTERN.md"]' in pyproject
-    assert '"share/memento-tattoo/templates" = ["templates/AGENTS.md"]' in pyproject
+    assert '"share/memento-tattoo/templates" = ["templates/AGENTS.md", "templates/PROTOCOL.md", "templates/memento-stub.md"]' in pyproject
+    assert '[tool.setuptools.package-data]' in pyproject
+    assert 'memento_tattoo = ["templates/*.md"]' in pyproject
+    assert 'dependencies = []' in pyproject
+    assert 'version = "0.5.0"' in pyproject
+
+
+def test_internal_planning_spec_is_outside_the_public_tree_without_special_excludes():
+    manifest = Path("MANIFEST.in").read_text(encoding="utf-8")
+    exporter = Path("scripts/export_public.py").read_text(encoding="utf-8")
+
+    assert not Path("docs/memory-layer-judgment-spec.md").exists()
+    assert "memory-layer-judgment-spec" not in manifest
+    assert "memory-layer-judgment-spec" not in exporter
+    assert "prune plans" in manifest
+    assert "recursive-include src/memento_tattoo/templates *.md" in manifest
+
+
+def test_packaged_templates_are_byte_identical_to_the_readable_templates():
+    for name in ("PROTOCOL.md", "memento-stub.md"):
+        readable = Path("templates", name).read_bytes()
+        packaged = Path("src/memento_tattoo/templates", name).read_bytes()
+        assert packaged == readable, f"copy templates/{name} to src/memento_tattoo/templates/{name}"

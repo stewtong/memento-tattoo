@@ -84,6 +84,7 @@ project/
   memory.md
 
 memento/
+  PROTOCOL.md
   notes.md
   tattoos.md
   retention_log.jsonl
@@ -94,13 +95,15 @@ memento/
 
 Use `project/memory.md` for state tied to one repo or project.
 
-Use `memento/notes.md` for provisional lessons. A note should include the situation, the lesson, and a few aliases that might help retrieval.
+Use `memento/PROTOCOL.md` for the agent procedure: correction handling, retrieval, the save judgment pass, record formats and promotion gates. Agents read it when a trigger fires, not every session.
 
-Use `memento/tattoos.md` for promoted lessons. A tattoo should be scarce, short enough to load often, and broad enough to apply across tasks.
+Use `memento/notes.md` for provisional lessons. A note should include the situation, the lesson, and a few aliases that might help retrieval. It may add a `Why:` field of one or two sentences naming the cost or mechanism behind the lesson. `Why:` is recommended, never required: a reason lets a later reader decide whether a new case is covered, and a required field would invite filler.
+
+Use `memento/tattoos.md` for promoted lessons. A tattoo should be scarce, short enough to load often, and broad enough to apply across tasks. Write it as `<action with its trigger>; <reason clause>.` The trigger says when the rule applies; the reason says why, so a reviewer can later ask whether the reason still holds.
 
 Use `memento/retention_log.jsonl` as an append-only record of checked retrieval decisions.
 
-Keep the four-file layout when it is enough. Add the archive and session surfaces only when the local workflow needs them.
+Keep the core layout when it is enough. Add the archive and session surfaces only when the local workflow needs them.
 
 ## Concurrency note
 
@@ -118,31 +121,42 @@ Those coordination pieces are what the `memento-tattoo` CLI implements as the re
 
 ## Agent instructions
 
-Add instructions like these to your agent config, for example `AGENTS.md`, `CLAUDE.md`, or another repo-local instruction file:
+Split the instructions in two, because always-loaded text is paid for on every request.
+
+1. A short stub goes in the always-on instruction file, for example `AGENTS.md`, `CLAUDE.md`, or another repo-local rules file. It loads tattoos, points at current project state, and says when to open the protocol:
 
 ```text
-When the user corrects you, write a note that captures:
-- the situation
-- what went wrong
-- the rule going forward
-- aliases that would help retrieve the lesson later
-
-Before writing a correction or reflection note, search existing notes for a matching lesson.
-
-If the session shows that a matching lesson existed but was missed, record `existing-missed` explicitly. Automatic similarity alone records `related`.
-
-When a new note relates to an existing note or tattoo, link to it by id instead of restating its lesson. Reference the prior note rather than duplicating it.
-
-If a lesson recurs across different situations, propose promoting it to a tattoo.
-
-Do not promote a tattoo without explicit user approval of its wording. If the user takes no action, park the candidate outside the tattoo set for later review.
-
-At startup, load tattoos when they exist. Before starting a task with a recognizable situation name, search notes and project memory for that situation, then load only the matches that could change the next action.
-
-Keep project memory beside the project. Put project-specific state close to the work it explains.
-
-Treat retention logs as append-only.
+## Memory (memento)
+- At session start, read memento/tattoos.md down to its "## Scoped" heading, or to the end if it has none. Each tattoo is an approved rule that states when it applies and why.
+- When working under a directory, read the "## Current state" (or "## State") section of the nearest memory.md, walking up to the repo root.
+- Before editing a file, also read the entries under "## Scoped" in memento/tattoos.md whose paths: glob matches it.
+- When the user corrects you, when you recognize the situation of a past lesson, or when the user says "save work", read memento/PROTOCOL.md and follow the matching section.
+- Add or change a line in memento/tattoos.md only after the user approves its exact wording.
 ```
+
+The two scoped lines take effect only when `tattoos.md` has a `## Scoped` heading whose entries carry a `paths:` glob. Without that heading, the agent reads the whole file at start, so the stub works unchanged in a repo that never scopes a rule. The reference CLI does not yet parse `paths:`; an agent following the stub matches globs by reading.
+
+2. `memento/PROTOCOL.md` holds the procedure, read on demand. It states each rule as behavior with its reason and covers plain-file mode and CLI mode. It must include:
+
+- When the user corrects the agent, search existing notes and tattoos for a matching lesson before writing, then repair the covering note or write a new one with the situation, the lesson, an optional `Why:`, and aliases.
+- If the session shows that a matching lesson existed but was missed, record `existing-missed` explicitly. Automatic similarity alone records `related`.
+- When a new note relates to an existing note or tattoo, link to it by id instead of restating its lesson.
+- Before a task with a recognizable situation, search notes and project memory for that situation, then load only the matches that could change the next action.
+- At "save work", run the judgment pass described under [Agent judgment](#agent-judgment).
+- If a lesson recurs across different situations, propose promoting it to a tattoo. Do not promote without explicit user approval of its wording. If the user takes no action, park the candidate outside the tattoo set for later review.
+- Keep project memory beside the project, and treat retention logs as append-only.
+
+Adapters for particular harnesses, such as an Agent Skills `SKILL.md`, point to `memento/PROTOCOL.md` and carry no copy of it, so the procedure has one source. The reference CLI's `init` command creates the root files, copies the protocol and prints the stub.
+
+The protocol names tool commands without restating their internals; counting rules, digests and replay receipts belong to the implementation's reference documentation.
+
+## Complete evidence and editorial revisions
+
+Keep a path from a short retrieval result to its complete source, including necessary exceptions and prior revisions. Mark clipped previews. A content-snapshot reference may identify an unmarked legacy record, but must not be described as a durable logical identity. Preserve ordinary notes' original identities when editing them.
+
+Agents may capture working notes and make evidence-backed revisions under the adopted policy, preserving the source, reason and visible prior active content. Revisions must not silently replace an owner decision or turn repeated agent proposals into approved rules. Durable rules and changes to their meaning or scope require explicit owner approval. An editorial change is not evidence that a lesson was applied or missed.
+
+The reference CLI provides `entry-read` for complete source-scoped reads and `note-amend` for guarded ordinary-note revisions. The amendment compares the full current block digest, retains its creation marker and stores prior active content plus provenance in the same atomically replaced Markdown file. History stays out of active recall. An identical immediate retry preserves bytes; stale edits and obsolete retries fail. Plain-file adaptations must supply their own coordination and revision discipline. This contract does not require a database or model-specific memory store.
 
 ## Promotion rules
 
@@ -152,7 +166,9 @@ Promote a note to a tattoo only when it passes a higher bar:
 - It applies beyond one narrow file or one unusual moment.
 - It would have changed future behavior if loaded earlier.
 - It would have dramatically improved the course of action if loaded at the beginning of the session.
-- It can be written as a declarative principle or compact rule.
+- It can be written as a declarative principle or compact rule, in the shape `<action with its trigger>; <reason clause>.`
+
+A tattoo states when its action helps and preserves necessary exceptions. Its wording must not turn a local correction into a universal restriction. Review scope, overlap, and the cost of unnecessary application before proposing it.
 
 Do not promote everything. Tattoos are valuable because the layer refuses to become a dump.
 
@@ -183,6 +199,7 @@ The retention log measures write-time classification hygiene. It does not prove 
 - Keep project memory beside the project.
 - Keep logs append-only.
 - Prefer plain text that humans can inspect and repair.
+- Report how many notes carry `Why:` and how many tattoos carry a reason clause, as review signals. A missing reason is never an error, and a coverage warning stays off unless the adaptation turns it on.
 - If archived notes are used, search hot and archived notes together. Report alias coverage separately for each store; 60 percent archived coverage is a starting review recommendation, not a universal requirement.
 - Do not claim benchmark wins without benchmark evidence.
 - Do not turn this into a transcript archive.
@@ -228,7 +245,7 @@ Adapt the pattern to this repo with the smallest useful implementation.
 
 Create or propose:
 1. A local file layout for notes, project memory, tattoos, and a retention log.
-2. Agent instructions for when to write notes.
+2. A short always-on instruction block, plus an on-demand protocol file for writing notes, saving work and proposing tattoos.
 3. Promotion rules that propose the strongest candidate at session end, require explicit approval, and park the candidate outside the tattoo set when no action is taken.
 4. Retrieval checks before writing correction or reflection notes.
 5. Guardrails that keep project facts local and tattoos scarce, with locally adaptable review thresholds.
@@ -239,13 +256,9 @@ Verify the result through the interface the user will invoke, whether that is re
 Do not build a database, vector search, hosted sync, or MCP server unless the current repo clearly needs it.
 ```
 
-## Interpret evidence within its scope
+## Evidence scope
 
-Automatic classification records `new` or `related`. Author judgments record their source separately. Historical events without that provenance remain unverified classifications; gardening retains their count but excludes them from observed-miss promotion counts. Citation counts establish mentions. Behavioral effectiveness requires evidence from the task. Sparse citations alone do not justify removing a rare, consequential safeguard.
-
-Use the named project's current state together with transferable lessons matching the action. Expand the search when evidence conflicts, a needed source is absent, or a consequential decision needs more support. A bounded result cannot establish absence. A newer summary does not supersede an authoritative decision merely by being newer. Preserve useful successful approaches as well as corrections.
-
-A tattoo states when its action helps and preserves necessary exceptions. Its wording must not turn a local correction into a universal restriction. Review scope, overlap, and the cost of unnecessary application before proposing it. Existing approval and candidate-parking rules still apply.
+Retention counts, citation counts and bounded search results each prove less than they appear to. Automatic classification is not an author judgment, a mention is not an application, and a search that finds nothing does not establish absence. The reference implementation defines these limits in [Concepts: interpret evidence within its scope](docs/concepts.md#interpret-evidence-within-its-scope); an adaptation keeps equivalent limits in its own reporting.
 
 ## Retrieve for the action and save the actual changes
 

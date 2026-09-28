@@ -8,6 +8,8 @@ This project is early and intentionally small. The useful contribution shape is 
 - a small fix that keeps the file-based model understandable
 - documentation that makes first-run usage clearer
 
+Report a suspected vulnerability privately, as described in [SECURITY.md](SECURITY.md), not in a public issue.
+
 When reporting a bug, include the package version, Python version, and, for a source checkout, the output of `git rev-parse HEAD`. Include a small synthetic reproduction and the observed result.
 
 ## Local setup
@@ -26,6 +28,10 @@ Build artifacts:
 .venv/bin/python -m pip install build
 .venv/bin/python -m build
 ```
+
+## Agent templates
+
+`templates/PROTOCOL.md` and `templates/memento-stub.md` are the readable sources. `init` installs them from byte-identical copies in `src/memento_tattoo/templates/`, which ship as package data. After editing either template, copy it over its package copy; a test fails when the two differ. The pattern contract and `templates/AGENTS.md` quote the stub, and a test checks those quotes too.
 
 ## Design boundaries
 

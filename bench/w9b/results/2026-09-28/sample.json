@@ -1,0 +1,220 @@
+{
+ "counts": {
+  "prometheus/prometheus": 50
+ },
+ "drawn_at": "2026-09-28T05:20:33+00:00",
+ "eligible": {
+  "prometheus/prometheus": 52
+ },
+ "excluded": {
+  "django/django": "no yield output (queries.jsonl)"
+ },
+ "per_repo_target": 50,
+ "sample": [
+  {
+   "query_id": "3511709690",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3577144641",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3588594989",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3620210575",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3620212630",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3620717777",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3621614117",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3621650911",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3621654277",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3701910434",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3727237807",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3769244533",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3773876331",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3773883450",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3794305633",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3795942126",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3796023444",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3820942801",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3843376766",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3851867807",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3851903070",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3852145003",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3863324919",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3871559894",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3909406466",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3933792949",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3933793098",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3959505932",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3969208107",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3978366576",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3978366802",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3984182567",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3986699223",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3990675834",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3990675968",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "3990676496",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4051418409",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4058654040",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4058666629",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4058724411",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4070558724",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4070558892",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4070559479",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4070970316",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4079707996",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4079708160",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4093434021",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4095481330",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4095517027",
+   "repo": "prometheus/prometheus"
+  },
+  {
+   "query_id": "4102491029",
+   "repo": "prometheus/prometheus"
+  }
+ ],
+ "seed": 20260927,
+ "sha256": "86b2e7280f10d2c1c72ace308d8b8dc8c8b3cd429603ca25762a4f482e396435",
+ "shortfalls": {},
+ "target_total": 50,
+ "unfilled": 0
+}

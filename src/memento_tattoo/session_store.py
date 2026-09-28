@@ -50,8 +50,13 @@ def render_session_block(
     insights: str,
     files: list[str],
 ) -> str:
+    _validate_session_id(sess)
+    for name, value in (("date", date), ("agent", agent if agent is not None else ""), ("significance", significance),
+                        *(("topic", topic) for topic in topics)):
+        if not isinstance(value, str) or re.search(r"[\x00-\x1f\x7f|\[\]]", value):
+            raise ValueError(f"invalid session header {name}")
     parse_session_date(date)
-    return (
+    block = (
         "---\n"
         f"[{sess} | {date} | {normalize_agent(agent)} | {', '.join(topics)} | {significance}]\n"
         f"Accomplished: {accomplished}\n"
@@ -61,12 +66,58 @@ def render_session_block(
         f"Files: {'; '.join(files)}\n"
         "---\n"
     )
+    _validate_session_block(block, sess)
+    return block
+
+
+def _validate_session_id(sess: str) -> None:
+    if not isinstance(sess, str) or not re.fullmatch(r"sess_[A-Za-z0-9_]+", sess):
+        raise ValueError("session id must match sess_[A-Za-z0-9_]+")
+
+
+def _validate_session_block(block: str, sess: str) -> None:
+    """Validate serialized input before even creating the root lock directory."""
+    _validate_session_id(sess)
+    if not isinstance(block, str) or "\r" in block or "\x00" in block:
+        raise ValueError("invalid session block")
+    lines = block.splitlines()
+    if len(lines) < 4 or lines[0] != "---" or lines[-1] != "---":
+        raise ValueError("session block must have opening and closing delimiters")
+    if not re.fullmatch(r"\[[^\[\]]+\]", lines[1]):
+        raise ValueError("invalid session header")
+    if re.search(r"[\x00-\x1f\x7f]", lines[1]):
+        raise ValueError("invalid session header control character")
+    parts = [part.strip() for part in lines[1][1:-1].split("|")]
+    if len(parts) != 5 or parts[0] != sess or not parts[2] or parts[4] not in {"low", "medium", "high"}:
+        raise ValueError("invalid session header or mismatched session id")
+    parse_session_date(parts[1])
+    labels = []
+    for line in lines[2:-1]:
+        if line.strip() == "---" or re.fullmatch(r"\[.*\]\s*", line):
+            raise ValueError("session narrative contains a reserved record delimiter")
+        match = re.match(rf"^({_FIELD_NAMES}):", line, re.IGNORECASE)
+        if match:
+            labels.append(match.group(1).lower())
+    if labels != [name.lower() for name in _FIELD_NAMES.split("|")]:
+        raise ValueError("session fields must occur exactly once in canonical order")
+
+
+def validate_session_destination(root: Path, sess: str) -> Path:
+    _validate_session_id(sess)
+    paths = paths_for(root)
+    sessions = paths.sessions.resolve()
+    path = paths.sessions / f"{sess}.md"
+    if not sessions.is_relative_to(paths.root) or not path.resolve().is_relative_to(sessions):
+        raise ValueError("session destination escapes memory root or sessions directory")
+    return path
 
 
 def write_session_block(root: Path, block: str, sess: str) -> Path:
+    _validate_session_block(block, sess)
     paths = paths_for(root)
-    path = paths.sessions / f"{sess}.md"
+    path = validate_session_destination(paths.root, sess)
     with memory_lock(paths.root):
+        validate_session_destination(paths.root, sess)
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
             existing = path.read_text(encoding="utf-8")
@@ -75,6 +126,8 @@ def write_session_block(root: Path, block: str, sess: str) -> Path:
             raise FileExistsError(f"session file already exists with different content: {path}")
         for record in load_sessions(paths.root):
             if record.sess == sess:
+                if record.path.read_text(encoding="utf-8") == block:
+                    return record.path
                 raise FileExistsError(f"session id already exists in another source: {record.path}")
         _atomic_write(path, block)
     return path
@@ -142,7 +195,7 @@ def parse_session_date(value: str) -> datetime:
 
 def _extract_field(text: str, field_name: str) -> str:
     pattern = re.compile(
-        rf"^{re.escape(field_name)}:\s*(.*?)(?=\n(?:{_FIELD_NAMES}):|\n---\s*$|$)",
+        rf"^{re.escape(field_name)}:[ \t]*(.*?)(?=\n(?:{_FIELD_NAMES}):|\n---[ \t]*(?:\n|\Z)|\Z)",
         re.IGNORECASE | re.MULTILINE | re.DOTALL,
     )
     match = pattern.search(text)

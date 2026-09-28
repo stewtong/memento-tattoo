@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and design discussion
+    url: https://github.com/stewtong/memento-tattoo/discussions
+    about: Ask a question or propose a design idea.
+  - name: Report a security problem
+    url: https://github.com/stewtong/memento-tattoo/security/advisories/new
+    about: Report a vulnerability privately.

@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in memento-tattoo behaves differently from its docs.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report security problems privately through the Security tab, not here. Use a small synthetic memory root; leave real notes and credentials out.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `memento-tattoo --version`, or `git rev-parse HEAD` for a source checkout.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and operating system
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Commands you ran
+      description: The exact commands, and the synthetic files they read, so someone else can run them.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and where the docs say so
+    validations:
+      required: true

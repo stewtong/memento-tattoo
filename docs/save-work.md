@@ -30,7 +30,6 @@ cat > "$demo_dir/save.json" <<EOF
   },
   "project_edit": {
     "project": "../project",
-    "section": "## State",
     "body": "- Situation: checking the save example\n- Note: the example is ready for read-back.",
     "mode": "replace",
     "flow_start": "$demo_date"
@@ -48,7 +47,7 @@ EOF
 .venv/bin/memento-tattoo --root "$demo_dir/memento" save-commit --spec "$demo_dir/save.json"
 ```
 
-The command should exit zero and end with `RESULT ok`. `project_edit.project` resolves relative to the Memento root, so `../project` above creates a sibling directory. Absolute project paths are also supported. The spec filename passed to `--spec` resolves from the shell's working directory. `session.files` records references; it does not create or validate those files.
+The command should exit zero and end with `RESULT ok`. `project_edit.section` is optional and defaults to the current-state heading the project's `memory.md` already uses (`## Current state` or `## State`). `project_edit.project` resolves relative to the Memento root, so `../project` above creates a sibling directory. Absolute project paths are also supported. The spec filename passed to `--spec` resolves from the shell's working directory. `session.files` records references; it does not create or validate those files.
 
 The required top-level fields are `sess`, `agent`, and `session`. Every field shown inside `session` is required. `topics` and `files` are lists of strings; the other session values are strings. `significance` accepts `low`, `medium`, or `high`. Use a parseable ISO date with an explicit UTC offset, as above. The spec's `agent` supplies save provenance. Reserve a new ID for each new save, then retain that ID and unchanged spec for retries.
 
@@ -68,7 +67,7 @@ cat "$demo_dir/memento/registry.md"
 .venv/bin/memento-tattoo --root "$demo_dir/memento" save-commit --spec "$demo_dir/save.json"
 ```
 
-The saved session should appear once, project state should contain the example text, and the registry should contain one `demo` entry. The identical retry should succeed without adding another session, project marker, or registry receipt. Receipts live under `_queue/applied/` and, after maintenance, `_queue/applied/archive/`; preserve them for replay checks.
+The saved session should appear once, project state should contain the example text, and the registry should contain one `demo` entry. The identical retry should succeed without adding another session, project marker, or registry receipt. Registry receipts live under `_queue/applied/` and, after maintenance, `_queue/applied/archive/`. Project receipts live under `_project_receipts/` even when no registry delta is supplied. Preserve both for replay checks.
 
 ## Adapt the spec to an existing project
 
@@ -89,6 +88,6 @@ For a registry update, use `action: "update"` and copy the exact inspected summa
 
 This fragment belongs in a new complete spec with a newly reserved session ID. An empty `expected_line` asserts that the slug is absent. If the guard rejects a stale draft, reread and reconcile the entry before saving. A completed save that has since been superseded cannot be replayed to restore old state.
 
-A new lesson can be supplied as a `note` string with `Situation:`, `Note:`, and `aliases:` lines, plus `note_kind` (`correction`, `reflection`, `seed`, or `pattern`). Search existing notes first; repair a covering lesson under [the agent instructions](../templates/AGENTS.md#correction-handling) instead of creating a duplicate. See [retention judgment fields](concepts.md#save-commit) for author observations. Add a `tattoo` field only after explicit user approval of its wording.
+A new lesson can be supplied as a `note` string with `Situation:`, `Note:`, optional `Why:`, and `aliases:` lines, plus `note_kind` (`correction`, `reflection`, `seed`, or `pattern`). Search existing notes first; repair a covering lesson as [the protocol](../templates/PROTOCOL.md#when-the-user-corrects-you) describes instead of creating a duplicate. See [retention judgment fields](concepts.md#save-commit) for author observations. Add a `tattoo` field only after explicit user approval of its wording.
 
-If a command fails, inspect its step output and the files already written. A save consists of separately verified writes; a later failure can leave earlier changes in place. Retry an unchanged spec when the failure is recoverable. When the session is archived, its registry receipt is missing, or its registry operation has been superseded, review current state and reserve a new session ID for further work. See [save recovery](concepts.md#retry-saves-without-restoring-old-state).
+If a command fails, inspect its step output and the files already written. A save consists of separately verified writes; a later failure can leave earlier changes in place. Retry an unchanged spec when the failure is recoverable. An identical archived session can be replayed while its project and registry operations remain current. If a required receipt is missing, or an operation was superseded or changed during an interrupted save, review current state and reserve a new session ID for further work. See [save recovery](concepts.md#retry-saves-without-restoring-old-state).

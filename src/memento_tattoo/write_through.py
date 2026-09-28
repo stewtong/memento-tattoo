@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import json
 import hashlib
 import os
 import re
@@ -11,7 +12,7 @@ from typing import Optional, Tuple
 from .agent import format_delta_marker, parse_delta_marker, resolve_agent
 from .config import paths_for
 from .lock import memory_lock
-from .project_memory import append_section, delta_note_ids, ensure_project_memory, extract_section_body, replace_section, section_changed_since
+from .project_memory import append_section, delta_note_ids, extract_section_body, replace_section, section_changed_since
 
 
 # The notes file is what situation-recognition greps and what a save loads
@@ -156,6 +157,16 @@ def _note_id_from_marker(marker: str) -> str:
     return marker[len("<!-- delta:") : -len(" -->")]
 
 
+RESERVED_MARKERS = ("<!-- memento-history:", "<!-- delta:")
+
+
+def _reject_reserved_markers(text: str) -> None:
+    """A body containing a record marker would split or corrupt the record it lands in."""
+    for marker in RESERVED_MARKERS:
+        if marker in text:
+            raise ValueError(f"text contains the reserved record marker {marker!r}")
+
+
 def note_add(
     text: str,
     *,
@@ -167,6 +178,7 @@ def note_add(
     decision: Optional[str] = None,
     covered_note_id: Optional[str] = None,
 ) -> Tuple[bool, str]:
+    _reject_reserved_markers(text)
     paths = paths_for(root)
     agent_id = resolve_agent(agent)
     has_retention_judgment = decision is not None or covered_note_id is not None
@@ -226,6 +238,7 @@ def note_add(
 
 
 def tattoo_add(text: str, *, sess: str, root: Path, agent: Optional[str] = None) -> Tuple[bool, str]:
+    _reject_reserved_markers(text)
     paths = paths_for(root)
     agent_id = resolve_agent(agent)
     body = text.strip()
@@ -247,36 +260,87 @@ def project_edit(
     flow_start: Optional[str] = None,
     agent: Optional[str] = None,
     mode: str = "auto",
+    prepare_only: bool = False,
+    require_receipt: bool = False,
 ) -> Tuple[bool, str]:
+    """Reserve, apply and acknowledge a project edit under the root lock.
+
+    A pending receipt permits retry only against its exact before/after bytes.
+    Completed operations never rewrite state if their marker has disappeared.
+    save-commit reserves before writing its session, avoiding ambiguous recovery.
+    """
     if mode not in {"auto", "append", "replace"}:
         raise ValueError("mode must be auto, append, or replace")
+    if not section.strip().startswith("## ") or "\n" in section:
+        raise ValueError("section must be a markdown h2 such as '## State'")
     paths = paths_for(root)
+    path = project.expanduser().resolve() / "memory.md"
     note_id = f"{sess}.project.{_hash8(section + body)}"
-    marker = format_delta_marker(note_id, agent=resolve_agent(agent))
+    identity = {"path": str(path), "sess": sess, "section": section, "body": body,
+                "mode": mode, "flow_start": flow_start}
+    receipt_key = hashlib.sha256(f"{path}\n{note_id}".encode()).hexdigest()
+    receipt_path = paths.root / "_project_receipts" / f"{receipt_key}.json"
     with memory_lock(paths.root):
-        path = ensure_project_memory(project)
-        existing = path.read_text(encoding="utf-8")
-        if note_id in existing:
-            return False, _find_existing_marker(existing, note_id) or marker
-        existing_section = extract_section_body(existing, section)
+        existing = path.read_bytes().decode("utf-8") if path.exists() else None
+        receipt = None
+        if receipt_path.exists():
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            if (not isinstance(receipt, dict) or receipt.get("version") != 1
+                    or receipt.get("identity") != identity
+                    or receipt.get("status") not in {"pending", "applied"}
+                    or not isinstance(receipt.get("marker"), str)
+                    or not isinstance(receipt.get("after_sha256"), str)
+                    or "before_sha256" not in receipt):
+                raise ValueError("invalid or conflicting project receipt; review current state and use a new session")
+        marker = receipt["marker"] if receipt else format_delta_marker(note_id, agent=resolve_agent(agent))
+        present = note_id in delta_note_ids(extract_section_body(existing or "", section))
+        if receipt and receipt["status"] == "applied":
+            if not present:
+                raise ValueError("project operation was superseded; review current state and use a new session")
+            return False, marker
+        if receipt and _project_digest(existing) == receipt["after_sha256"]:
+            receipt["status"] = "applied"
+            _atomic_write(receipt_path, json.dumps(receipt, indent=2) + "\n")
+            return False, marker
+        if receipt and _project_digest(existing) != receipt["before_sha256"]:
+            raise ValueError("pending project operation was superseded or edited; review current state and use a new session")
+        if not receipt and present:
+            # Bootstrap an old operation only when its marker still exists.
+            marker = _find_existing_marker(existing, note_id) or marker
+            receipt = {"version": 1, "identity": identity, "marker": marker, "status": "applied",
+                       "before_sha256": _project_digest(existing), "after_sha256": _project_digest(existing)}
+            _atomic_write(receipt_path, json.dumps(receipt, indent=2) + "\n")
+            return False, marker
+        if not receipt and require_receipt:
+            raise ValueError("existing session has no project receipt; review current state and use a new session")
+
+        source = existing if existing is not None else "# Project Memory\n\n## Key Decisions\n\n## State\n"
+        existing_section = extract_section_body(source, section)
         if mode == "append":
-            updated = append_section(existing, section, body, marker)
+            updated = append_section(source, section, body, marker)
         else:
             preserve_existing = mode == "auto" and section_changed_since(existing_section, flow_start)
             if mode == "auto" and not preserve_existing:
-                existing_delta_ids = delta_note_ids(existing_section)
-                body_delta_ids = delta_note_ids(body)
-                dropped = sorted(existing_delta_ids - body_delta_ids)
+                dropped = sorted(delta_note_ids(existing_section) - delta_note_ids(body))
                 if dropped:
                     raise ValueError(
                         "project-edit auto mode would drop existing delta markers; choose --append or --replace"
                     )
-            updated = replace_section(
-                existing,
-                section,
-                body,
-                marker,
-                preserve_existing=preserve_existing,
-            )
+            updated = replace_section(source, section, body, marker, preserve_existing=preserve_existing)
+        if receipt:
+            if _project_digest(updated) != receipt["after_sha256"]:
+                raise ValueError("project receipt does not match reconstructed write")
+        else:
+            receipt = {"version": 1, "identity": identity, "marker": marker, "status": "pending",
+                       "before_sha256": _project_digest(existing), "after_sha256": _project_digest(updated)}
+            _atomic_write(receipt_path, json.dumps(receipt, indent=2) + "\n")
+        if prepare_only:
+            return False, marker
         _atomic_write(path, updated)
+        receipt["status"] = "applied"
+        _atomic_write(receipt_path, json.dumps(receipt, indent=2) + "\n")
         return True, marker
+
+
+def _project_digest(text: str | None) -> str | None:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() if text is not None else None

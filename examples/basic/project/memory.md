@@ -2,11 +2,11 @@
 
 ## Key Decisions
 
-- Keep the public release as a local-first CLI with plain Markdown files.
-- Publish from a clean release tree after tests pass.
+- Keep every package in one repository, and let CI test only the packages whose files changed so pull requests stay fast.
+- Rename public functions in one change that also updates their callers.
 
-## State
+## Current state
 
 <!-- delta:sess_demo.project.11111111 -->
-- Situation: public release readiness
-- Note: verify package installability from the built artifact before sharing.
+- Situation: billing package API rename
+- Note: `format_amount` is now `format_money`; the checkout package's caller was updated in the same change.

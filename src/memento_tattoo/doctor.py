@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -17,7 +18,11 @@ RECOMMENDED_ALIAS_COVERAGE_PERCENT = 60
 RECOMMENDED_TATTOO_COUNT = 25
 RECOMMENDED_TATTOO_BYTES = 7_168
 RECOMMENDED_TATTOO_LENGTH = 300
+# Why-field and reason-clause coverage are report-only by default; 0 disables the warning.
+DEFAULT_WHY_COVERAGE_WARN = 0
+DEFAULT_TATTOO_REASON_WARN = 0
 TATTOO_SAMPLE_LIMIT = 3
+PROJECT_STATE_HEADINGS = ("## State", "## Current state")
 
 
 def run_doctor(
@@ -28,6 +33,8 @@ def run_doctor(
     tattoo_count_warn: int = RECOMMENDED_TATTOO_COUNT,
     tattoo_bytes_warn: int = RECOMMENDED_TATTOO_BYTES,
     tattoo_length_warn: int = RECOMMENDED_TATTOO_LENGTH,
+    why_coverage_warn: float = DEFAULT_WHY_COVERAGE_WARN,
+    tattoo_reason_warn: float = DEFAULT_TATTOO_REASON_WARN,
 ) -> tuple[bool, str]:
     paths = paths_for(root)
     checks: list[tuple[str, str, str]] = []
@@ -54,6 +61,11 @@ def run_doctor(
     except Exception as exc:
         checks.append(("fail", "alias-coverage", f"note sources unreadable: {exc}"))
 
+    try:
+        checks.append(_check_why_coverage(paths.root, why_coverage_warn))
+    except Exception as exc:
+        checks.append(("fail", "why-coverage", f"note sources unreadable: {exc}"))
+
     if paths.project.exists():
         checks.append(("pass", "project", f"{paths.project.name} present"))
     else:
@@ -63,12 +75,12 @@ def run_doctor(
         path = project_memory_path(project)
         if path.exists():
             text = path.read_text(encoding="utf-8")
-            if "## Key Decisions" in text and "## State" in text:
-                checks.append(("pass", "project-memory", f"{path.name} present for {Path(project).name}"))
+            if "## Key Decisions" in text and _has_state_heading(text):
+                checks.append(("pass", "project-memory", f"{path.name} present for {_project_label(project)}"))
             else:
-                checks.append(("fail", "project-memory", f"{path.name} missing required sections for {Path(project).name}"))
+                checks.append(("fail", "project-memory", f"{path.name} missing required sections for {_project_label(project)}"))
         else:
-            checks.append(("fail", "project-memory", f"{path.name} missing for {Path(project).name}"))
+            checks.append(("fail", "project-memory", f"{path.name} missing for {_project_label(project)}"))
 
     if not paths.retention_log.exists():
         checks.append(("warn", "retention", "retention_log.jsonl missing"))
@@ -138,6 +150,8 @@ def run_doctor(
             )
         except Exception as exc:
             checks.append(("fail", "tattoo-pressure", f"tattoos.md unreadable: {exc}"))
+        else:
+            checks.append(_check_tattoo_reasons(tattoo_text, tattoo_reason_warn))
         try:
             flagged_count = sum(1 for c in audit_tattoos(root=paths.root) if c.flagged)
         except Exception as exc:
@@ -158,10 +172,14 @@ def run_doctor(
             checks.append(("fail", "tattoo-firing", f"tattoo_firing.json unreadable: {exc}"))
 
     from .garden import digest_counts
-    counts = digest_counts(root=paths.root, today=now_iso_date())
-    actionable = counts["stale"] + counts["repair"] + counts["promote"]
-    status = "warn" if actionable else "pass"
-    checks.append((status, "gardening", f"{counts['repair']} repair, {counts['stale']} stale, {counts['promote']} promotion candidates"))
+    try:
+        counts = digest_counts(root=paths.root, today=now_iso_date())
+    except Exception as exc:
+        checks.append(("fail", "gardening", f"note sources unreadable: {exc}"))
+    else:
+        actionable = counts["stale"] + counts["repair"] + counts["promote"]
+        status = "warn" if actionable else "pass"
+        checks.append((status, "gardening", f"{counts['repair']} repair, {counts['stale']} stale, {counts['promote']} promotion candidates"))
 
     ok = all(status != "fail" for status, _, _ in checks)
     lines = ["MEMENTO_TATTOO_DOCTOR"]
@@ -249,6 +267,92 @@ def _check_alias_coverage(root: Path, warn_percent: float) -> tuple[str, str, st
         detail += f"; archive coverage below {warn_percent:g}% review threshold"
         return "warn", "alias-coverage", detail
     return "pass", "alias-coverage", detail
+
+
+def _project_label(project: Path) -> str:
+    return Path(project).name or Path(project).resolve().name
+
+
+def _has_state_heading(text: str) -> bool:
+    import re
+
+    return any(re.search(rf"(?m)^{re.escape(heading)}\s*$", text) for heading in PROJECT_STATE_HEADINGS)
+
+
+@dataclass(frozen=True)
+class WhyCoverage:
+    with_why: int
+    total: int
+
+
+def why_coverage_summary(root: Path) -> dict[str, WhyCoverage]:
+    """Count valid hot and archived note records that carry a nonempty ``Why:`` field.
+
+    The population matches alias coverage: blocks that start with a delta marker and
+    parse as notes. Records without ``Why:`` are counted, never rejected.
+    """
+    paths = paths_for(root)
+    return {
+        "hot": _why_counts(paths.notes, "notes.md"),
+        "archive": _why_counts(paths.notes_archive, "notes_archive.md"),
+    }
+
+
+def _why_counts(path: Path, source_name: str) -> WhyCoverage:
+    import re
+
+    from .entries import split_history
+    from .recall import _DELTA_MARKER_RE, _extract_field, _parse_delta_note
+
+    if not path.exists():
+        return WhyCoverage(with_why=0, total=0)
+    text = path.read_bytes().decode("utf-8")
+    total = 0
+    with_why = 0
+    for block in re.split(r"(?m)(?=^<!--\s*delta:)", text):
+        block = block.strip()
+        if _parse_delta_note(block, source_name) is None:
+            continue
+        total += 1
+        marker = _DELTA_MARKER_RE.search(block)
+        body, _ = split_history(block[marker.end():].strip())
+        if _extract_field(body, "Why"):
+            with_why += 1
+    return WhyCoverage(with_why=with_why, total=total)
+
+
+def _check_why_coverage(root: Path, warn_percent: float) -> tuple[str, str, str]:
+    coverage = why_coverage_summary(root)
+    hot = coverage["hot"]
+    archive = coverage["archive"]
+    detail = f"hot {hot.with_why}/{hot.total} with Why; archive {archive.with_why}/{archive.total} with Why"
+    if warn_percent > 0:
+        below = [
+            name
+            for name, item in (("hot", hot), ("archive", archive))
+            if item.total and item.with_why * 100 < warn_percent * item.total
+        ]
+        if below:
+            detail += f"; {' and '.join(below)} below {warn_percent:g}% review threshold"
+            return "warn", "why-coverage", detail
+    return "pass", "why-coverage", detail
+
+
+def has_reason_clause(text: str) -> bool:
+    """True when a tattoo follows the ``<action with its trigger>; <reason clause>.`` shape."""
+    action, separator, reason = text.partition(";")
+    return bool(separator and action.strip() and reason.strip(" .\t\n"))
+
+
+def _check_tattoo_reasons(text: str, warn_percent: float) -> tuple[str, str, str]:
+    tattoos = parse_tattoos(text)
+    total = len(tattoos)
+    with_reason = sum(1 for tattoo in tattoos if has_reason_clause(tattoo.text))
+    detail = f"{with_reason}/{total} with a reason clause"
+    if warn_percent > 0 and total and with_reason * 100 < warn_percent * total:
+        detail += f"; below {warn_percent:g}% review threshold"
+        return "warn", "tattoo-reasons", detail
+    return "pass", "tattoo-reasons", detail
 
 
 def _check_tattoo_pressure(

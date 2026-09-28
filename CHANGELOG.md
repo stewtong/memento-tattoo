@@ -2,7 +2,42 @@
 
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-09-28
+
+The first tagged release. Install it from GitHub with `uvx --from git+https://github.com/stewtong/memento-tattoo@v0.5.0 memento-tattoo init`; it is not published to PyPI. It also includes the 0.4.0 changes, which were never released on their own; see the [full changelog](https://github.com/stewtong/memento-tattoo/blob/v0.5.0/CHANGELOG.md).
+
+- Splits the agent instructions into a short always-on stub (`templates/memento-stub.md`) and an on-demand procedure (`templates/PROTOCOL.md`) covering corrections, retrieval, the save judgment pass, record formats and promotion gates in plain-file and CLI modes. The pattern contract's agent-instructions block is now the stub.
+- Adds `memento-tattoo init`, which creates the memory root files and project `memory.md`, copies `PROTOCOL.md`, prints the stub, and never overwrites an existing file. `--adapter skill` writes an Agent Skills `SKILL.md` that points to the protocol; `--adapter claude-md-import` prints or creates the `CLAUDE.md` import line. The protocol and stub ship as package data.
+- Adds an optional `Why:` note field and a documented tattoo shape, `<action with its trigger>; <reason clause>.` `doctor` reports `Why:` coverage for hot and archived notes and reason-clause coverage for tattoos. Both are report-only by default, with `--why-coverage-warn` and `--tattoo-reason-warn` thresholds that are off unless set.
+- `doctor` accepts `## Current state` as well as `## State` as a project memory's state section.
+- Replaces the flagship example. The bundled example, README loop and quickstart now teach a monorepo lesson: search other packages for callers before changing a public API, because CI runs only the changed package's tests. The earlier verification rule, "Before claiming work is complete, run the command that proves it and read the output.", remains as a note in the example, since technique reminders belong in notes.
+- `templates/AGENTS.md` becomes a worked example: the stub beside a sample repo's own rules.
+- Replaces the README's compatibility sentence with the design intent (harness- and model-agnostic) and states that no harness and model combination has a recorded cross-harness test yet.
+- Keeps one copy of "Interpret evidence within its scope", in `docs/concepts.md`, with links from the pattern. Moves tool semantics out of the agent instructions into `docs/concepts.md`.
+- `load` ranks with field-weighted BM25 (BM25F) instead of fixed bonuses per matched word, so a rare word such as `ledger` outweighs common ones such as `agent` or `test`, and the `Why:` field now counts toward matching. Queries and notes match whole words instead of substrings, with plural folding, so `art` no longer matches `start` and `rollbacks` matches `rollback`. End-to-end `load` over 5,000 synthetic notes takes about 0.45 s, against 0.35 s in 0.4.0. The retention classifier also matches whole words but keeps fixed-bonus scoring, since its thresholds are calibrated to it.
+- Adds `memento-tattoo --version`.
+- `note-add` and `tattoo-add` reject text containing a record marker (`<!-- delta:` or `<!-- memento-history:`), which would corrupt the file it lands in. A hand-edited, malformed history block now makes `load` exit with an error naming the note, and `doctor` reports it as a failed check instead of crashing. `note-add` and `tattoo-add` report errors instead of printing a traceback.
+- `save-commit` without a `project_edit.section` edits the current-state heading the project's `memory.md` already has, so a project created by `init` (`## Current state`) no longer gains a second, `## State` section. `load` skips an empty current-state heading when a later one has content.
+- `load` and the cover check in `note-add` refuse a root file that resolves outside the memory root, such as a `notes.md` symlinked to another directory. Keep the memory files inside the root.
+- Adds a protocol section for bringing in rules a repo already keeps (`AGENTS.md`, `CLAUDE.md`, rules folders, harness memory): the agent proposes candidate notes for approval, writes approved ones as `seed` notes, and leaves the source unchanged.
+- Adds `SECURITY.md`: private reporting through GitHub, scope, and supported versions.
+- Adds issue and pull request templates, and a release workflow that builds each tagged version and publishes it as a GitHub release, with the changelog entry as its notes.
+- Publishes the evaluation code under `bench/`, including the repeated-correction benchmark built from public code review. Its first results, on prometheus/prometheus, found no advantage for memento-tattoo over any of five baselines, including a short curated file and no memory, on 50 queries that searched with the raw diff; the sample detects only differences of about 18 percentage points or more at 80% power: [results](https://github.com/stewtong/memento-tattoo/blob/v0.5.0/bench/w9b/RESULTS.md).
+
+## 0.4.0 - not released separately
+
+These changes first ship in 0.5.0.
+
+
+- Adds complete source-scoped entry reads, explicit preview clipping and read references, including content snapshots for unmarked project records.
+- Adds guarded ordinary-note amendments with stable creation IDs, visible prior content and provenance, byte-stable immediate retry and stale-write rejection.
+- Keeps editorial revision history out of active recall and citation counts; amendments create no retention observations or tattoo changes.
+
+- Repositions the README around persistent memory for coding agents: a category-first opening with the notes/Polaroids/tattoos mapping, the film's unreliable-records rationale, the correction-to-recall example up front, and consolidated positioning sections. The displayed hero now appears in the README itself, and the park-on-silence rule matches the pattern contract.
+- Aligns the package description with the coding-agent positioning.
+- Rejects superseded project replays without requiring a registry delta; preserves independent receipts and recovers interrupted project writes by recorded content hashes.
+- Validates session IDs, serialized headers, field structure and destination containment before persistence; reuses identical archived sessions in place.
+- Preserves multiline note qualifications and session narratives, including continuation-only recall matches from hot and archived notes.
 
 - Adds a runnable save JSON walkthrough and the complete registry-file format, with guarded-update and replay guidance.
 - Recovers interrupted retention rotation without counting copied events twice; gives new events distinct identities.

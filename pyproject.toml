@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memento-tattoo"
-version = "0.3.1"
-description = "Correction-retention loop for coding agents."
+version = "0.5.0"
+description = "Persistent memory for coding agents, inspired by Christopher Nolan's Memento."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -35,9 +35,12 @@ test = ["pytest>=8"]
 [project.scripts]
 memento-tattoo = "memento_tattoo.cli:main"
 
+[tool.setuptools.package-data]
+memento_tattoo = ["templates/*.md"]
+
 [tool.setuptools.data-files]
 "share/memento-tattoo" = ["MEMENTO-PATTERN.md"]
-"share/memento-tattoo/templates" = ["templates/AGENTS.md"]
+"share/memento-tattoo/templates" = ["templates/AGENTS.md", "templates/PROTOCOL.md", "templates/memento-stub.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

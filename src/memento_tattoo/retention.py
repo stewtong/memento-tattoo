@@ -203,7 +203,8 @@ def classify(
 ) -> dict:
     from .recall import rank_memento_notes
 
-    ranked = rank_memento_notes(situation, root=root, limit=limit + (1 if exclude_note_id else 0))
+    # The cover thresholds above are calibrated to the fixed-bonus scale, so the classifier keeps it.
+    ranked = rank_memento_notes(situation, root=root, limit=limit + (1 if exclude_note_id else 0), scoring="bonus")
     ranked = [item for item in ranked if item.note.note_id != exclude_note_id][:limit]
     candidates = [
         {"note_id": item.note.note_id, "rank": index + 1, "score": item.score}

@@ -16,6 +16,12 @@ Plain Markdown is enough to try the correction-retention pattern. Use the CLI wh
 
 ## Command reference
 
+Setup:
+
+```text
+memento-tattoo init [--root <path>] [--project <project_dir>] [--adapter generic|skill|claude-md-import] [--dir <skills_dir>] [--write]
+```
+
 Core loop:
 
 ```text
@@ -23,12 +29,14 @@ memento-tattoo --root <path> note-add --sess <sess_id> [--kind correction|reflec
 memento-tattoo --root <path> tattoo-add --sess <sess_id> <text>
 memento-tattoo --root <path> project-edit --project <project_dir> --sess <sess_id> [--section "## State"] [--flow-start ISO] [--append|--replace] <text>
 memento-tattoo --root <path> load [--project <project_dir>]... --query <query> [--limit N]
+memento-tattoo --root <path> entry-read [--id <entry_id>] [--source <store_path>] [--project <project_dir>]... [--format json|markdown]
+memento-tattoo --root <path> note-amend --id <note_id> [--source <store_path>] --expected-sha256 <digest> --sess <sess_id> --author <author> --reason <reason> --evidence <source_reference> <complete_active_body>
 ```
 
 Maintenance:
 
 ```text
-memento-tattoo --root <path> doctor [--project <project_dir>]... [--alias-coverage-warn PERCENT] [--tattoo-count-warn N] [--tattoo-bytes-warn N] [--tattoo-length-warn N]
+memento-tattoo --root <path> doctor [--project <project_dir>]... [--alias-coverage-warn PERCENT] [--tattoo-count-warn N] [--tattoo-bytes-warn N] [--tattoo-length-warn N] [--why-coverage-warn PERCENT] [--tattoo-reason-warn PERCENT]
 memento-tattoo --root <path> garden [--today YYYY-MM-DD] [--promote-threshold N] [--limit N]
 memento-tattoo --root <path> rebuild [--check]
 memento-tattoo --root <path> queue-maintenance [--days N] [--max-hot N] [--apply]
@@ -48,6 +56,22 @@ memento-tattoo --root <path> save-commit --spec <json>
 
 Set `--agent <agent_id>` or `MEMENTO_AGENT` when several sessions may write to the same root. Agent IDs are provenance, not permissions.
 
+## Instruction surface and init
+
+Agents get memento's instructions in two layers. A short stub (five instructions under one heading) goes in the always-on instruction file (`AGENTS.md`, `CLAUDE.md`, or a rules file). It loads tattoos at session start, points at the nearest project `## Current state`, and tells the agent to read `memento/PROTOCOL.md` on a correction, a recognized past situation, or "save work". The protocol holds the procedure and is read only when one of those triggers fires, so its size costs nothing in sessions that do not need it. Both files ship in the package and in `templates/`.
+
+`memento-tattoo init` sets up a repo:
+
+- It creates `notes.md`, `tattoos.md`, `retention_log.jsonl` and `PROTOCOL.md` in the memory root (`./memento` by default, or `--root`), and a project `memory.md` with `## Key Decisions` and `## Current state` in `--project` (default: the current directory when it contains the root, otherwise the root's parent directory).
+- It never overwrites. An existing file is reported as `skipped (exists)` and left untouched, so running `init` again is safe and repairs only missing files.
+- It prints the stub for you to paste. When the root is not `memento/` under the project directory, the printed paths point at the actual root.
+
+`--adapter` adds a harness-specific pointer. Each adapter points at `memento/PROTOCOL.md` and contains none of its text, so there is one copy of the procedure to maintain:
+
+- `generic` (the default): the stub only.
+- `skill`: writes `memento-tattoo/SKILL.md` under `.agents/skills/` in the project directory, or under `--dir <skills_dir>` for a client that reads skills from another directory. The file follows the [Agent Skills specification](https://agentskills.io/specification.md): its `name` matches the `memento-tattoo` directory, and its `description` names the triggers. Its body tells the agent to open `memento/PROTOCOL.md` from the repository root. Format conformance is tested; whether a given client discovers and activates the skill depends on that client.
+- `claude-md-import`: prints the `@AGENTS.md` line that makes a `CLAUDE.md` import `AGENTS.md`. With `--write`, it creates `CLAUDE.md` containing that line when the file is absent, and otherwise reports whether the line is already present.
+
 ## Notes
 
 Notes are fast lesson captures. They usually come from a correction, reflection, or import. They live in `notes.md` as readable Markdown blocks with a provenance marker:
@@ -56,9 +80,12 @@ Notes are fast lesson captures. They usually come from a correction, reflection,
 <!-- delta:sess_demo.note.11111111 agent=codex ts=2026-06-17T18:24:58Z -->
 Situation: publishing a public repo
 Note: scan examples for private names, secret values, and local paths before publishing.
+Why: a published file stays in forks and caches after it is deleted.
 aliases: oss, public, sanitize, release
 review_after: 2026-12-31
 ```
+
+`Situation:` and `Note:` are required. `Why:` is optional: one or two sentences naming the cost or mechanism behind the lesson. `aliases:` and `review_after:` are optional. Notes written before `Why:` existed load unchanged, and `doctor` reports how many notes carry it.
 
 Old markers without `agent=` or `ts=` still load. New writes include agent identity so several local sessions can leave provenance without changing the stable note id.
 
@@ -68,7 +95,7 @@ For how to write a note that stays retrievable (situation as a recognizable symp
 
 Project memory is the middle layer: context local to a project or task area that should survive across sessions. In the public package this lives adjacent to the project as `memory.md`, not inside the Memento root.
 
-Required sections:
+Required sections are `## Key Decisions` and a state section, headed `## Current state` or `## State`. `init` writes `## Current state`, the heading the instruction stub names; `project-edit` creates `## State` when it makes a new file, and recall reads either.
 
 ```markdown
 # Project Memory
@@ -77,7 +104,7 @@ Required sections:
 
 - Durable decisions that explain why the project is shaped this way.
 
-## State
+## Current state
 
 - Situation: current work surface
 - Note: what changed, what matters now, and what a future agent should not rediscover.
@@ -110,7 +137,15 @@ If this had been loaded at the beginning of the session, would it have dramatica
 
 Promote only when the lesson has recurred and is durable across unrelated future sessions, behavioral rather than merely informational, broader than the project or file that produced it, short enough to load often, and written as a declarative principle or compact rule. Tattoo promotion still requires explicit user approval before running `tattoo-add`.
 
-At session end, the agent manually proposes the strongest candidate and its reason for clearing the bar. The CLI neither proposes nor parks candidates. Explicit approval promotes the proposed wording. Rejection leaves any useful lesson as an ordinary note. No action parks the candidate in a durable non-tattoo surface, such as a session marker or tagged note, for later review. Silence is never approval.
+A tattoo's documented shape is `<action with its trigger>; <reason clause>.`, for example:
+
+```markdown
+- Before changing a package's public API, search the other packages for callers; CI runs only the changed package's tests.
+```
+
+`doctor` counts a tattoo as having a reason clause when a semicolon separates nonempty action text from nonempty reason text. The count is a shape check; it cannot judge whether the reason is true or still holds.
+
+At session end, the agent manually proposes the strongest candidate and its reason for clearing the bar. The CLI neither proposes nor parks candidates. Explicit approval promotes the proposed wording. Rejection leaves any useful lesson as an ordinary note. If the user takes no action, park the candidate in a durable non-tattoo surface, such as a session marker or tagged note, for later review. Silence is never approval.
 
 For the full five-gate promotion standard, including merge-first and the provenance rule, see [authoring-standards.md](authoring-standards.md).
 
@@ -125,6 +160,8 @@ The command produces no writes. Acting on its output requires explicit agent jud
 ## Sessions
 
 Sessions are small Markdown save records in `memento/sessions/`. Agents should reserve a session id with `new-id` instead of inventing one by hand, then write one `session-add` record for the work they completed.
+
+New session IDs must match `sess_[A-Za-z0-9_]+`. The shared writer checks the ID, serialized header, field order and destination before creating files. Header values cannot contain pipes, brackets or control characters. Narrative fields support multiple lines, including qualifications, but a line containing a record delimiter or a reserved field label starts structure and cannot be embedded as narrative. Prefix quoted structural lines with `> ` to keep them inside the narrative. Existing three-field legacy headers remain readable. Session destinations resolving outside the memory root or sessions directory are rejected, including symlink escapes; the writer rechecks under the root lock. External processes that replace directories without taking that lock are outside this cooperative-write guarantee.
 
 `session-list` reads hot and archived session records, newest first, and prints stable tab-separated fields for ID, date, agent, significance, topics, and location. Use `--hot-only` or `--archive-only` to narrow the result.
 
@@ -142,6 +179,13 @@ Run `rebuild` to refresh them or `rebuild --check` to detect drift.
 ## Doctor recommendations
 
 `doctor` reports hot and archived note alias coverage separately as `aliased/total`. The default archived-note recommendation is 60 percent. It also reports tattoo count, aggregate UTF-8 bytes, and tattoos longer than the configured length. Its recommended starting values are 25 tattoos, 7,168 bytes, and 300 characters per tattoo.
+
+`doctor` also reports reason coverage:
+
+- `why-coverage: hot X/Y with Why; archive X/Y with Why` counts valid note records carrying a nonempty `Why:` field, over the same records as alias coverage.
+- `tattoo-reasons: X/Y with a reason clause` counts tattoos in the `<action with its trigger>; <reason clause>.` shape.
+
+Both are report-only by default. `--why-coverage-warn PERCENT` warns when the hot or archived store falls below that share, and `--tattoo-reason-warn PERCENT` does the same for tattoos. Their default of `0` keeps the warning off. A store with no `Why:` fields reports zero coverage and passes.
 
 These values are review triggers, not validity requirements or quotas. Each warning accepts an override, and `0` disables that warning while preserving the measurement. Low archive coverage asks for alias review; it never causes aliases to be generated. Tattoo pressure starts a keep, demote, merge, or cut review; it never removes a lesson automatically.
 
@@ -200,6 +244,10 @@ Use these fields only with correction or reflection notes. Seed and pattern note
 
 ## Checked Retrieval
 
+`load` and the classifier match whole words. Text is lowercased and split on anything that is not a letter or digit, so `save-commit` matches `save` and `commit`, and `art` does not match `start`. Plurals fold to their singular with Harman's three S-stemmer rules (`policies` matches `policy`, `rollbacks` matches `rollback`); `ing` and `ed` endings are not folded, and `indexes` does not match `index`. Words shorter than three characters are ignored unless they contain a digit (`s3`, `v2`).
+
+`load` ranks with BM25F, computed when the query runs, with no index to maintain. A word that appears in few notes counts for more than a common one, a word repeated within one field saturates instead of adding linearly, and long fields are normalized for length. Fields are weighted: situation 3, aliases 2, note 1.5, `Why:` 1, tags 0.5 (k1 1.2, b 0.75). A superseded note keeps half its score, so its successor ranks first. The retention classifier keeps the earlier fixed-bonus scoring, because its cover thresholds are set on that scale.
+
 When adding a `correction` or `reflection` note, the package first ranks existing notes for the new situation. It records `related` for a possible covering lesson or `new` when the classifier finds none.
 
 These matches identify candidates for review. An author must inspect the task evidence to record a missed lesson or useful application. An observed miss can justify repairing the retrieval trigger.
@@ -212,8 +260,8 @@ memento-tattoo --root <path> note-add \
   --kind correction \
   --decision existing-missed \
   --covered-note-id sess_old.note.11111111 \
-  "Situation: repeating an unverified completion claim
-Note: strengthened the completion-check lesson so future claims load the proof-command rule."
+  "Situation: an API change passed CI and then broke another package after merge
+Note: sharpened the caller-search lesson so it matches the next public API change."
 ```
 
 This keeps the CLI mechanical while letting the agent remain the judge.
@@ -280,6 +328,44 @@ Identical registry operations reuse their original receipts and timestamps. Appl
 
 Note rotation writes the archive before removing hot content. A retry reconciles overlap and checks both stores for existing note IDs. Each surface is verified separately; the complete save is not an all-or-nothing transaction. A failure may leave earlier verified steps in place. Rebuild writes only changed indexes.
 
-A save whose completed registry operation has been superseded fails before writing project snapshots. This check does not serialize a whole save against concurrent writers. Use expected-line guards for registry drafts and reconcile concurrent project edits. Replaying a session already moved to the session archive is rejected by the session collision check; review current state and reserve a new session ID for further work.
+Project operations retain independent JSON receipts in `_project_receipts/`, keyed by the resolved project path and delta ID. This protects both `project-edit` and `save-commit`, including saves without a registry delta. Each receipt records the operation, original marker, before/after SHA-256 values and pending/applied status. Keep this directory with the memory root; receipts are retained when sessions are archived and have no automatic pruning.
+
+Under the root lock, the writer reserves a pending receipt before replacing project content, then marks the receipt applied after the project write. `save-commit` reserves its project operation before writing the session. A retry of a pending operation proceeds only when current content matches its recorded before state; matching after content repairs the missing acknowledgement without rewriting the project. Any other content causes failure with instructions to review state and use a new session. Receipt reads, checks and each project write share the same lock. Writers for the same project must use the same memory root.
+
+An applied operation returns unchanged only while its delta marker remains in the intended section. A later replacement that removes that marker makes an older replay fail before restoring content. A remaining marker is replay evidence, not a proof that manually edited prose still has its original meaning. New operations still use the existing append, replace or concurrent-edit rules. A whole save spans several separately locked writes, so an intervening writer can cause a prepared operation to fail safely; the caller must reconcile that conflict.
+
+For legacy saves with an existing hot or archived session but no project receipt, a surviving project marker can establish a receipt without rewriting the project. If the marker is gone, the save fails closed: the tool cannot distinguish an interrupted historical save from an obsolete completed one. A standalone project edit made before receipts, without a session record or surviving marker, has no recoverable replay identity. Review current state and use a new session ID for that historical operation. Deleting receipts removes replay protection for standalone operations. Malformed or conflicting receipts fail rather than being replaced automatically.
+
+An identical session already in the archive is reused in place; different content for the same ID still fails. Superseded registry operations retain their existing rejection rules. Use expected-line guards for registry drafts and reconcile concurrent project edits.
 
 If a note was persisted but its retention event failed, retrying the note repairs the missing event. Automatic classification is evaluated again at retry time with that note excluded from candidates; it does not reconstruct the earlier task. Existing events retain their original judgment and provenance.
+
+
+## Read complete evidence and revise ordinary notes
+
+`load` retains its current ranking and preview limits. Each match now includes `source_path`, `entry_id`, `content_sha256`, `excerpt_clipped`, and a shell-quoted `read_reference`. Follow that reference when an exception may be clipped or a decision needs its full source. Historical project `note_id` positions remain in previews for compatibility; use `entry_id` with the exact source for complete reads.
+
+`entry-read` emits JSON containing the exact source, entry kind, identity type, content and its SHA-256. It reads hot/archive notes, marked tattoos, hot/archive sessions, root `project.md`, and project `memory.md` files explicitly declared with `--project`. `--source` disambiguates matching IDs; duplicate records within one source still require reconciliation. Unknown IDs and undeclared source paths fail. A source-scoped read parses that source only, so an unrelated malformed session does not block reading a note. Symlink targets outside declared roots are rejected.
+
+For marked records, `content` preserves the block from its marker, with trailing whitespace normalized to one newline. Its digest covers the UTF-8 bytes of exactly that returned string, including stored revision history. Session records and whole-file snapshots preserve their complete file bytes. Full reads have no preview limit. `--format markdown` displays active content and each revision's previous active text and provenance as readable sections.
+
+Unmarked project pair previews and project state use `project-file:<sha256>` references to the complete project file, so continuation lines and exceptions remain available. Pair previews mark omitted source context explicitly. Any file-content change invalidates that snapshot, including insertion elsewhere; refresh recall to obtain the new reference. These are content snapshots, not durable logical IDs. A source-only read, such as `entry-read --source tattoos.md`, returns the complete declared file, including unmarked legacy content, with a `store-file:<sha256>` reference. Snapshot references require a fresh read after their content changes. Ordinary note IDs remain their original creation identities after amendment; the hash suffix in that ID is not the current-content digest.
+
+To amend a note, read it first, retain the returned `sha256`, and pass the complete revised active body to `note-amend`. Supply the amendment session, author, reason and supporting source reference. `--source` is the store selector; `--evidence` describes the evidence for the change. The CLI checks that provenance fields are supplied, but does not verify their truth or grant authority to change an owner decision.
+
+```sh
+memento-tattoo --root ./memento entry-read --id sess_example.note.12345678 --source notes.md
+memento-tattoo --root ./memento note-amend --id sess_example.note.12345678 --source notes.md --expected-sha256 <returned_sha256> --sess sess_revision --author codex --reason "Preserve the migration exception" --evidence "owner-review:2026-09-07" "Situation: failed health check
+Note: Inspect migration status before restarting.
+Exception: while migration is active, preserve the running service."
+```
+
+These command shapes use placeholder IDs and digests. Use the values returned by your own source read.
+
+The writer retains the creation marker and atomically replaces the selected Markdown block under the existing root lock. A `memento-history:v1` JSON comment keeps each prior active body, source/reason, author, amendment session, timestamp and operation identity. Each revision stores only its prior active body, so history is not recursively copied. History is excluded from active recall, aliases and supersession fields; historical tattoo references cannot add citation counts. Readable revision output is available through `entry-read --format markdown`.
+
+The expected digest rejects stale changes. An identical immediate retry recognizes the last amendment and preserves file bytes; replay after a later revision fails. All writers must share the same memory root and lock. The atomic replacement uses the existing filesystem guarantees and does not add a power-loss durability claim. Preserve the history comment and creation marker when moving or backing up a block; deleting them removes replay evidence.
+
+The active body requires nonempty `Situation:` and `Note:` fields and cannot inject delta/history comments, record delimiters or duplicate recognized field headers. `Superseded-by:` may point to one existing ordinary note; missing or ambiguous successors, self-reference and cycles fail before writing. Both old and successor records remain available for full reads.
+
+Amendment is an editorial action. It never appends retention observations, bumps firing telemetry or changes tattoos. Capture and evidence-backed revision of working notes may be automatic under the adopted policy. Durable rules, changes to their meaning or scope, and changes to an owner decision require the owner's authorization. Repetition of an agent proposal does not provide it. Record an observed application or miss separately only when the task evidence supports that observation; an edit alone is not evidence of either.
