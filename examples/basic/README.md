@@ -38,7 +38,7 @@ aliases: correction, repeat, duplicate, retention, downstream, breakage
 - Before changing a package's public API, search the other packages for callers; CI runs only the changed package's tests.
 ```
 
-The tattoo follows the shape `<action with its trigger>; <reason clause>.` The reason is a fact about this repo's CI that a model cannot infer from the code, which is what earns it a line that loads every session. The next time an agent is about to change a public function, the tattoo is already in context, and it searches for callers before CI can give a false green.
+The tattoo follows the shape `<action with its trigger>; <reason clause>.` The reason is a fact about this repo's CI that a model cannot infer from the code, which is what earns it a line that loads every session. The next time an agent is about to change a public function, the tattoo is already in context, before CI can give a false green.
 
 `sess_demo.note.44444444` keeps a general verification reminder, to run the proof command before claiming completion, as a note. Technique reminders like that are retrieved when their situation matches; they do not need the always-loaded layer.
 

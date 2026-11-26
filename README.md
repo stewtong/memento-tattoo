@@ -4,19 +4,25 @@
 
 **Persistent memory for coding agents, inspired by Christopher Nolan's *Memento*.**
 
-Keep corrections and project decisions available across sessions. `memento-tattoo` stores them in local Markdown files and ranks the stored lessons against the next task. It is designed to be harness- and model-agnostic: the one required integration is an instruction file the agent already reads, such as `AGENTS.md`, `CLAUDE.md`, or a rules file. Tested harness and model combinations will be listed here once the cross-harness smoke test has run.
+Keep corrections and project decisions available across sessions. `memento-tattoo` stores them in local Markdown files, ranks the stored lessons against the next task, and keeps a short list of rules you have approved for loading at the start of each session. It is designed to be harness- and model-agnostic: the one required integration is an instruction file the agent already reads, such as `AGENTS.md`, `CLAUDE.md`, or a rules file. Everything is plain Markdown you can inspect, repair, and delete: no database, no hosted service, and no model dependency in the CLI.
 
-In *Memento*, Leonard relies on notes, Polaroids, and tattoos because he cannot form new long-term memories. Coding agents also need records to carry corrections across sessions. Those records can be wrong, stale, or taken out of context. You and your agent preserve reasons and evidence, record revisions, and mark superseded advice. You approve the few rules loaded every session. The CLI never verifies a lesson's truth by itself; that judgment stays with you and your agent.
+To set up a repository, run this from its root (needs `uv` and Python 3.11 or newer, on macOS or Linux):
 
-`memento-tattoo` adapts the film's tiered system:
+```bash
+uvx --from git+https://github.com/stewtong/memento-tattoo memento-tattoo init
+```
+
+`init` creates the memory files and prints a short stub. Paste the stub into the instruction file your agent reads every session. The stub tells the agent to read your approved rules at session start and to follow the protocol when you correct it or say "save work". See [Install from GitHub](#install-from-github) to keep the command installed, and [How it plugs into your agent](#how-it-plugs-into-your-agent) for what the stub does.
+
+In *Memento*, Leonard relies on notes, Polaroids, and tattoos because he cannot form new long-term memories. `memento-tattoo` adapts that tiered system:
 
 - **Notes** (`notes.md`) capture lessons from corrections and experience.
 - **Polaroids** (project `memory.md` files) keep decisions and current state beside the work.
 - **Tattoos** (`tattoos.md`) are the few rules you explicitly approve for loading at the start of each session.
 
-![Evidence board in the style of Memento: pinned Polaroids of project state, handwritten notes, and red string converging on a small forearm tattoo, the notes, memory, and tattoo layers of memento-tattoo](docs/memento-memory-hero-v2.png)
+**Status.** Version 0.5. It runs on macOS and Linux and is distributed from this repository, not PyPI. Harness and model combinations have not been smoke-tested yet; tested ones will be listed here. In the one benchmark so far, `memento-tattoo` showed no advantage over any of four baselines or over no memory, at a sample size that detects only large differences. See [Evidence so far](#evidence-so-far).
 
-The same pattern works for research, writing, and other knowledge work, anywhere a correction or decision should outlive the session that produced it. Coding agents are the primary audience and the first example. Everything is plain Markdown you can inspect, repair, and delete: no database, no hosted service, and no model dependency in the CLI.
+![Evidence board in the style of Memento: pinned Polaroids of project state, handwritten notes, and red string converging on a small forearm tattoo, the notes, memory, and tattoo layers of memento-tattoo](docs/memento-memory-hero-v2.png)
 
 ## The loop in one example
 
@@ -24,34 +30,40 @@ The same pattern works for research, writing, and other knowledge work, anywhere
 2. The user's correction is captured as a note with the situation it applies to, the lesson, and a `Why:` line naming the cause the agent could not see, in [examples/basic/memento/notes.md](examples/basic/memento/notes.md).
 3. When a later API change repeats the mistake, the retention log records that the existing lesson was missed, in [examples/basic/memento/retention_log.jsonl](examples/basic/memento/retention_log.jsonl).
 4. If you approve the wording, the lesson is promoted to [examples/basic/memento/tattoos.md](examples/basic/memento/tattoos.md): "Before changing a package's public API, search the other packages for callers; CI runs only the changed package's tests."
-5. The next session loads that tattoo at start, so the agent searches for callers before CI can give a false green.
+5. The next session loads that tattoo at start, so the rule is in front of the agent before it changes a public API.
 
 See [examples/basic/README.md](examples/basic/README.md) for the concrete walkthrough. The loop is deliberately small: **capture** what from the session should change a future action, **persist** it to plain Markdown, and **retrieve** only the lessons relevant to the next task.
 
-## Adoption
+## What it is and is not
+
+Coding agents need records to carry corrections across sessions. Those records can be wrong, stale, or taken out of context. You and your agent preserve reasons and evidence, record revisions, and mark superseded advice. You approve the few rules loaded every session. The CLI never verifies a lesson's truth by itself; that judgment stays with you and your agent.
+
+Modern coding agents already have memory surfaces (`AGENTS.md`, `CLAUDE.md`, rules files, auto-memory folders, hooks). `memento-tattoo` does not replace them; it gives them a correction-retention loop.
+
+This reference implementation does not include vector search, embeddings, a database, an MCP server, auto-capture hooks, hosted sync, transcript storage, a generic personal memory system, or migration tooling from any private setup.
+
+Nothing in the pattern is specific to code. It could serve research, writing, and other knowledge work, anywhere a correction or decision should outlive the session that produced it. Coding agents are the primary audience and the only use exercised in this repository.
+
+## How it plugs into your agent
 
 The agent reads memento's instructions in two layers:
 
 - A short stub, [templates/memento-stub.md](templates/memento-stub.md), goes in the instruction file your agent loads every session. It loads tattoos at start, points at the nearest project `## Current state`, and says when to open the protocol.
-- [templates/PROTOCOL.md](templates/PROTOCOL.md), copied to `memento/PROTOCOL.md`, holds the procedure: handling a correction, retrieving lessons, the save judgment pass, bringing in existing rules, the note and tattoo formats, and the promotion gates. The agent reads it only when the user corrects it, when it recognizes a past lesson's situation, when the user says "save work", or when the user asks it to bring in existing rules, so it costs nothing in other sessions.
+- [templates/PROTOCOL.md](templates/PROTOCOL.md), copied to `memento/PROTOCOL.md`, holds the procedure: handling a correction, retrieving lessons, the save judgment pass, bringing in existing rules, the note and tattoo formats, and the promotion gates. The agent reads it only when the user corrects it, when it recognizes a past lesson's situation, when the user says "save work", or when the user asks it to bring in existing rules, so other sessions do not read it.
 
 With the CLI installed, `memento-tattoo init` creates the memory root and project `memory.md`, copies `PROTOCOL.md`, and prints the stub to paste. It never overwrites an existing file. `init --adapter skill` also writes an Agent Skills `SKILL.md` that points to the protocol, and `init --adapter claude-md-import` prints the line that makes `CLAUDE.md` import `AGENTS.md` (with `--write`, it creates `CLAUDE.md` when absent). See [Concepts](docs/concepts.md#instruction-surface-and-init) for the options.
 
 ### Use the plain Markdown pattern
 
-You do not need the CLI to try the idea. Copy `templates/PROTOCOL.md` to `memento/PROTOCOL.md`, paste the stub into your instruction file, and create the files shown in [File layout](#file-layout): a project `memory.md` beside the work, plus `notes.md`, `tattoos.md`, and a retention log under `memento/`. [templates/AGENTS.md](templates/AGENTS.md) shows the stub beside a sample repo's own rules. That is enough for a single agent or a repo-local convention; it does not provide concurrent-write protection.
+You do not need the CLI to try the idea. Copy `templates/PROTOCOL.md` to `memento/PROTOCOL.md`, paste the stub into your instruction file, and create the files shown in [File layout](#file-layout): a project `memory.md` beside the work, plus `notes.md`, `tattoos.md`, and a retention log under `memento/`. [templates/AGENTS.md](templates/AGENTS.md) shows the stub beside a sample repo's own rules. That is enough for a single agent or a repo-local convention; it does not provide concurrent-write protection. The CLI adds checked writes, ranked recall, `doctor` checks, gardening, and optional local coordination for parallel agents.
 
-Modern coding agents already have memory surfaces (`AGENTS.md`, `CLAUDE.md`, rules files, auto-memory folders, hooks). `memento-tattoo` does not replace them; it gives them a correction-retention loop. To bring rules you already keep into memento, ask your agent to follow "When the user asks you to bring in existing rules" in `memento/PROTOCOL.md`. It proposes candidate notes for your approval and leaves the original file unchanged.
+To bring rules you already keep in `AGENTS.md`, `CLAUDE.md`, or a rules file into memento, ask your agent to follow "When the user asks you to bring in existing rules" in `memento/PROTOCOL.md`. It proposes candidate notes for your approval and leaves the original file unchanged.
 
 ## Install from GitHub
 
-Requires Python 3.11 or newer on macOS or Linux; the locking implementation uses POSIX `fcntl`, so Windows is not currently supported. The package is distributed from this repository, not PyPI. To set up a repository without installing anything permanently, run this from its root:
+Requires Python 3.11 or newer on macOS or Linux; the locking implementation uses POSIX `fcntl`, so Windows is not currently supported. The package is distributed from this repository, not PyPI. The `uvx` command at the top of this page sets up a repository without installing anything permanently.
 
-```bash
-uvx --from git+https://github.com/stewtong/memento-tattoo memento-tattoo init
-```
-
-To keep the command installed, use `pipx install git+https://github.com/stewtong/memento-tattoo`. Add a release tag to pin a version, for example `git+https://github.com/stewtong/memento-tattoo@v0.5.1`. `init` prints a short stub; paste it into the instruction file your agent reads every session (see [Adoption](#adoption)).
+To keep the command installed, use `pipx install git+https://github.com/stewtong/memento-tattoo`. Add a release tag to pin a version, for example `git+https://github.com/stewtong/memento-tattoo@v0.5.1`. `init` prints a short stub; paste it into the instruction file your agent reads every session (see [How it plugs into your agent](#how-it-plugs-into-your-agent)).
 
 ## Install from a checkout
 
@@ -64,9 +76,7 @@ python3.12 -m venv .venv
 
 If your system provides Python 3.11 instead, use `python3.11 -m venv .venv`.
 
-The CLI adds checked writes, ranked recall, `doctor` checks, gardening, and optional local coordination for parallel agents.
-
-## Quickstart
+## Quickstart from a checkout
 
 Verify the install against the bundled example:
 
@@ -167,15 +177,27 @@ For a runnable JSON spec that saves a session, project state, and registry entry
 
 Use `memento-tattoo load --query "<situation and action>" --project <directory>` to combine a project's explicit current-state section with relevant lessons. Historical notes remain searchable and superseded entries remain labelled. For a registry edit, copy the inspected line into `registry_delta.expected_line` in the save JSON. The driver rejects a stale draft before writing the session; drain rechecks for intervening changes. An empty expected line means the entry must be absent. See [the pattern contract](MEMENTO-PATTERN.md#retrieve-for-the-action-and-save-the-actual-changes) for scope and compatibility.
 
-## Retrieval, retention, and what the numbers prove
+## Evidence so far
 
 `load` ranks lessons against the situation named in the query, across hot and archived notes, and includes the project's explicit current-state section. When a correction or reflection is written, the system records whether a covering lesson was detected at that write-time checkpoint; authors can separately record whether a lesson was missed, applied, or overapplied.
 
-You can re-run the deterministic baseline with `.venv/bin/python scripts/retention_eval.py`, which checks the classifier's cover detection against a small bundled set of cases. It prints 3/3 true covers flagged (1.00 coverage) and 0/3 negative queries flagged (0.00 false-positive rate); three cases each cannot show more than that the classifier works on them.
+You can re-run the classifier check with `.venv/bin/python scripts/retention_eval.py`, which runs the classifier's cover detection against a small bundled set of cases. It prints 3/3 true covers flagged (1.00 coverage) and 0/3 negative queries flagged (0.00 false-positive rate); three cases each cannot show more than that the classifier works on them.
 
 Those figures measure note-write classification hygiene and cover detection. They do not measure behavioral repeat reduction, retrieval exposure, whether an agent applied a lesson, or recurrence against opportunities; optional author observations do not supply comprehensive exposure or opportunity denominators. A promotion gate with a review lifecycle sits on top: corrections become rules, rules can become scarce tattoos, and `tattoo-audit` flags promoted lessons for keep, demote, or cut review.
 
-Whether retrieval helps an agent avoid a repeated mistake is measured separately, by a benchmark built from public code review: when a reviewer makes the same correction on several pull requests, does the earlier comment reach an agent reviewing the later one, and does the agent raise the point? The [first results](bench/w9b/RESULTS.md), on one repository (prometheus/prometheus) with 50 queries, found no advantage for `memento-tattoo` over a short curated file, a long uncurated file, plain BM25, local embeddings, or no memory. All six raised the reviewer's point on 25 to 27 of the 50 queries. Against no memory the difference was +4 points, with a 95% interval of 0 to +10: `memento-tattoo` raised the point on 2 queries that no memory missed and missed none that no memory raised. The benchmark counts an advantage only when the interval excludes zero, so by its rule this is no advantage. The sample detects only differences of about 18 percentage points or more at 80% power; a smaller real difference would usually read as no advantage, so this result does not show that the arms are equivalent. The relevant earlier lesson reached the agent in 7 of 50 queries with `memento-tattoo` and 12 of 50 with the long file. The benchmark searches with the raw diff; a query written by the agent, as in normal use, was not tested. No person checked any label or grade. GLM-5.3-Flash made the labels and GPT-6 Astra confirmed them; the only check of their accuracy, on samples of 200 pairs, was made by Claude Opus 5.5, which is also the agent and the grader. The scored repository is also the pilot repository: its pairs were used to tune the labeling, so the label checks measure agreement with the grader the labeling was tuned toward. The method is in the [specification](bench/w9b/README.md).
+Whether retrieval helps an agent avoid a repeated mistake is measured separately, by a benchmark built from public code review: when a reviewer makes the same correction on several pull requests, does the earlier comment reach an agent reviewing the later one, and does the agent raise the point?
+
+The [first results](bench/w9b/RESULTS.md), on one repository (prometheus/prometheus) with 50 queries, found no advantage for `memento-tattoo` over a short curated file, a long uncurated file, plain BM25, local embeddings, or no memory. All six raised the reviewer's point on 25 to 27 of the 50 queries. The relevant earlier lesson reached the agent in 7 of 50 queries with `memento-tattoo` and 12 of 50 with the long file.
+
+Limits of that result:
+
+- **Against no memory.** The difference was +4 points, with a 95% interval of 0 to +10: `memento-tattoo` raised the point on 2 queries that no memory missed and missed none that no memory raised. The benchmark counts an advantage only when the interval excludes zero, so by its rule this is no advantage.
+- **Sample size.** The sample detects only differences of about 18 percentage points or more at 80% power; a smaller real difference would usually read as no advantage, so this result does not show that the arms are equivalent.
+- **Query form.** The benchmark searches with the raw diff; a query written by the agent, as in normal use, was not tested.
+- **Labels and grades.** No person checked any label or grade. GLM-5.3-Flash made the labels and GPT-6 Astra confirmed them; the only check of their accuracy, on samples of 200 pairs, was made by Claude Opus 5.5, which is also the agent and the grader.
+- **Repository.** The scored repository is also the pilot repository: its pairs were used to tune the labeling, so the label checks measure agreement with the grader the labeling was tuned toward.
+
+The method is in the [specification](bench/w9b/README.md).
 
 ## Advanced: local coordination
 
@@ -269,6 +291,9 @@ memento/
 
 `init` creates `project/memory.md`, `memento/PROTOCOL.md`, `notes.md`, `tattoos.md`, and `retention_log.jsonl`. The CLI adds the other files when the features that use them run.
 
+<details>
+<summary>What each file holds</summary>
+
 - `project/memory.md`: adjacent project action journal: key decisions, current state, and work performed.
 - `memento/PROTOCOL.md`: the agent procedure, read when a correction, a recognized situation, or "save work" calls for it.
 - `memento/notes.md`: provisional lessons and corrections.
@@ -284,13 +309,11 @@ memento/
 - `memento/.memento.lock`: advisory lock for short write operations.
 - `memento/.reserved_ids`: short-lived session-ID reservations so parallel agents do not collide before a session file is written.
 
+</details>
+
 `session-list` includes hot and archived records by default. `session-archive` moves only records older than the caller-selected `--days` cutoff, previews exact paths by default, and moves files only with `--apply`. Archived sessions remain readable to lookup, rebuild, and collision checks.
 
-`doctor` reports note alias coverage as `aliased/total` for hot and archived note stores separately, and `Why:` coverage the same way. Its archived-store recommendation starts at 60 percent coverage. It also reports tattoo count, total UTF-8 bytes, and over-length tattoos. The starting review recommendations are 25 tattoos, 7,168 bytes, and 300 characters per tattoo. It also counts tattoos written with a reason clause. `Why:` and reason-clause coverage are report-only unless you set `--why-coverage-warn` or `--tattoo-reason-warn`. Each warning can be changed or disabled without hiding its measurement. Warnings start a keep, demote, merge, or cut review and never remove a lesson automatically.
-
-## Out of scope
-
-This reference implementation does not include vector search, embeddings, a database, an MCP server, auto-capture hooks, hosted sync, transcript storage, a generic personal memory system, or migration tooling from any private setup.
+`doctor` reports alias and `Why:` coverage for hot and archived notes, tattoo count and size, and how many tattoos carry a reason clause. Its thresholds are review triggers that you can change or disable. A warning starts a keep, demote, merge, or cut review; warnings never remove a lesson automatically. The starting values are in [Doctor recommendations](docs/concepts.md#doctor-recommendations).
 
 ## Docs
 
