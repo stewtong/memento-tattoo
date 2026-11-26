@@ -12,7 +12,7 @@ from .lock import memory_lock
 from .retention import DECISIONS
 from .session_store import render_session_block, write_session_block, load_sessions, validate_session_destination
 from .project_memory import default_state_section
-from .write_through import note_add, project_edit, tattoo_add
+from .write_through import _reject_reserved_markers, note_add, project_edit, tattoo_add
 
 
 _ALLOWED_KEYS = {
@@ -252,6 +252,12 @@ def _validate(spec: dict[str, Any]) -> str:
     for key in ("note", "tattoo", "author"):
         if key in spec and spec[key] is not None and not isinstance(spec[key], str):
             return f"{key} must be a string"
+    for key in ("note", "tattoo"):
+        if spec.get(key):
+            try:
+                _reject_reserved_markers(spec[key])
+            except ValueError as exc:
+                return f"{key}: {exc}"
     verify = spec.get("verify", [])
     if not isinstance(verify, list) or not all(isinstance(item, str) for item in verify):
         return "verify must be a list of strings"

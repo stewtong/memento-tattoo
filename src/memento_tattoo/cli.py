@@ -398,7 +398,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "save-commit":
         from .save_commit import save_commit
 
-        spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
+        try:
+            spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValueError, RecursionError) as exc:
+            print(f"RESULT FAIL error=cannot read spec {args.spec}: {type(exc).__name__}: {exc}")
+            return 1
         result = save_commit(spec, root=root, allow_deferred_drain=args.allow_deferred_drain)
         print(result.render())
         return 0 if result.ok else 1

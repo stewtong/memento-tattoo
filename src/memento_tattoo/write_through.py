@@ -79,8 +79,11 @@ def rotate_hot_notes(hot_path: Path, archive_path: Path, *, threshold: Optional[
 def _atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _append_eof(path: Path, sess: str, kind: str, body: str, *, agent: str = "unknown") -> Tuple[bool, str]:
@@ -158,6 +161,7 @@ def _note_id_from_marker(marker: str) -> str:
 
 
 RESERVED_MARKERS = ("<!-- memento-history:", "<!-- delta:")
+_DELTA_MARKER_ANY_SPACING = re.compile(r"<!--\s*delta:")
 
 
 def _reject_reserved_markers(text: str) -> None:
@@ -165,6 +169,9 @@ def _reject_reserved_markers(text: str) -> None:
     for marker in RESERVED_MARKERS:
         if marker in text:
             raise ValueError(f"text contains the reserved record marker {marker!r}")
+    # The readers split records on "<!--", optional whitespace, then "delta:".
+    if _DELTA_MARKER_ANY_SPACING.search(text):
+        raise ValueError("text contains the reserved record marker '<!-- delta:' (spacing variant)")
 
 
 def note_add(
