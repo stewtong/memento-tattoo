@@ -88,13 +88,10 @@ Create a new root and run the loop once:
   "- Situation: billing package API rename
 - Note: format_amount is now format_money; the checkout caller was updated in the same change."
 
-note_text=$(cat <<'EOF'
-Situation: changing a function signature or name in a shared package's public API
+note_text="Situation: changing a function signature or name in a shared package's public API
 Note: search every other package for callers before changing a package's public API.
 Why: CI runs only the changed package's tests, so a broken caller in another package stays green until it ships.
-aliases: monorepo, breaking change, rename, callers, ci
-EOF
-)
+aliases: monorepo, breaking change, rename, callers, ci"
 
 .venv/bin/memento-tattoo --root .tmp/demo/memento note-add --sess sess_demo --kind correction "$note_text"
 
