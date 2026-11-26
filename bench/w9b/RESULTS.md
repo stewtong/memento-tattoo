@@ -96,7 +96,7 @@ GLM-5.3-Flash (low reasoning effort) decided every candidate pair, and GPT-6 Ast
 
 ## Changes from the specification
 
-The specification was frozen on September 27, 2026 for eight repositories and 336 agent-level queries; that text is published unchanged as [specification-as-frozen.md](results/2026-09-28/specification-as-frozen.md). The specification and its changelog were kept in a private working copy until this release, so the freeze and change dates are the author's record, not public commits. prometheus/prometheus, the scored repository, is also the pilot repository whose pairs were used to tune the labeling. Each reduction below made a no-advantage result more likely.
+The specification was frozen on September 27, 2026 for eight repositories and 336 agent-level queries; that text is published as [specification-as-frozen.md](results/2026-09-28/specification-as-frozen.md), unchanged except for two relative link paths corrected in 0.5.1. The specification and its changelog were kept in a private working copy until this release, so the freeze and change dates are the author's record, not public commits. prometheus/prometheus, the scored repository, is also the pilot repository whose pairs were used to tune the labeling. Each reduction below made a no-advantage result more likely.
 
 Made before any arm was scored, and dated in the specification's changelog:
 

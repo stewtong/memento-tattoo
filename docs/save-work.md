@@ -39,8 +39,7 @@ cat > "$demo_dir/save.json" <<EOF
     "slug": "demo",
     "line": "- Demo - ../project/ - Example saved - active",
     "expected_line": ""
-  },
-  "verify": ["Prepared a synthetic save example.", "the example is ready for read-back."]
+  }
 }
 EOF
 
@@ -51,7 +50,7 @@ The command should exit zero and end with `RESULT ok`. `project_edit.section` is
 
 The required top-level fields are `sess`, `agent`, and `session`. Every field shown inside `session` is required. `topics` and `files` are lists of strings; the other session values are strings. `significance` accepts `low`, `medium`, or `high`. Use a parseable ISO date with an explicit UTC offset, as above. The spec's `agent` supplies save provenance. Reserve a new ID for each new save, then retain that ID and unchanged spec for retries.
 
-For a session-only save, omit `project_edit` and `registry_delta`, set `session.files` to the actual references or `[]`, and adjust `verify` to match the session text. `verify` is optional; its strings are searched across the touched files. Read back each expected output to confirm where the content landed.
+For a session-only save, omit `project_edit` and `registry_delta`, and set `session.files` to the actual references or `[]`. A `verify` list of strings is still accepted and optional, but it is discouraged. The check runs as the last step, after every write is already durable, and searches the files the save touched for the strings the spec supplies, so a missing string reports a failed save whose content is already saved. To confirm where the content landed, use the read-back commands in the next section.
 
 ## Read back the saved files and replay
 

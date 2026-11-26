@@ -23,7 +23,7 @@ Existing memory benchmarks (LongMemEval, LoCoMo, MemoryAgentBench, ContextBench)
 | Rust | astral-sh/ruff | MIT |
 | Java | apache/kafka | Apache-2.0 |
 
-- **Selection rules.** An MIT, Apache or BSD license; code review on GitHub pull requests; review mostly by people. The list was chosen from these rules before any result was seen. The only check made before freezing it is a count of review comments per repository, to confirm each has enough material ([feasibility counts](feasibility/)). A repository may be replaced under the same rules until the first arm runs, and the replacement is recorded.
+- **Selection rules.** An MIT, Apache or BSD license; code review on GitHub pull requests; review mostly by people. The list was chosen from these rules before any result was seen. The only check made before freezing it is a count of review comments per repository, to confirm each has enough material ([feasibility counts](../../feasibility/)). A repository may be replaced under the same rules until the first arm runs, and the replacement is recorded.
 - **Window.** Pull request review comments created from September 27, 2025 to September 27, 2026. Collected on September 27 and 28, 2026; each repository's collection time is recorded with the dataset.
 - **Bot filter.** A comment is excluded when its author's account type is `Bot` or the login ends in `[bot]`.
 - **Unit.** Top-level human review comments (not replies within a thread) are the candidate lessons and queries. Replies are kept only as context for deciding whether a comment was a correction.
@@ -75,7 +75,7 @@ The agent level costs model calls, so it runs on a fixed sample drawn once, with
 
 - **Only recent pull requests.** Every sampled query comes from a pull request opened on or after July 1, 2026, after the agent model's documented training cutoff, so the agent cannot have seen the reviewer's comment during training. Its lessons may come from anywhere earlier in the window.
 - **Equal share per repository.** 42 queries from each repository, 336 in total, drawn at random from that repository's eligible queries (at least one relevant earlier lesson). If a repository has fewer than 42, all of them are used and the shortfall is redrawn evenly from the other repositories; any shortfall is reported.
-- **Size.** From [power.py](power.py): 330 paired queries give 80% power to detect a 10-point difference between two arms at a two-sided 5% level, for discordance rates up to 40%, checked by simulation under the bootstrap decision rule below. 336 meets that.
+- **Size.** From [power.py](../../power.py): 330 paired queries give 80% power to detect a 10-point difference between two arms at a two-sided 5% level, for discordance rates up to 40%, checked by simulation under the bootstrap decision rule below. 336 meets that.
 
 Bootstrap intervals resample queries within each repository.
 

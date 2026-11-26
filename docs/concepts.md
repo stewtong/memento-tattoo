@@ -225,7 +225,7 @@ Agents write registry changes through `_queue/` first. A queued delta has a diff
 
 It is not a transaction. If a later verification fails, earlier durable writes remain in place and are reported in the result.
 
-The agent still performs the judgment pass before writing the spec. A typical spec contains the session summary, an optional note, optional retention judgment fields, optional project memory update, optional registry update, and verify strings.
+The agent still performs the judgment pass before writing the spec. A typical spec contains the session summary, an optional note, optional retention judgment fields, optional project memory update, and optional registry update.
 
 Project memory updates can include `"mode": "auto"`, `"mode": "append"`, or `"mode": "replace"` inside `project_edit`. Use append for accumulating sections and replace for intentional current-state rewrites.
 
