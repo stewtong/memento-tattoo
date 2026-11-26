@@ -105,7 +105,7 @@ def test_packaging_declares_installed_contract_and_template_locations():
     assert '[tool.setuptools.package-data]' in pyproject
     assert 'memento_tattoo = ["templates/*.md"]' in pyproject
     assert 'dependencies = []' in pyproject
-    assert 'version = "0.5.0"' in pyproject
+    assert 'version = "0.5.1"' in pyproject
 
 
 def test_internal_planning_spec_is_outside_the_public_tree_without_special_excludes():
