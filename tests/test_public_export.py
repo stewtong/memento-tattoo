@@ -1,8 +1,18 @@
 from pathlib import Path
 
+import pytest
+
 from scripts.export_public import PUBLIC_ENTRIES, export_public
 
 
+BENCH_ROOT = Path(__file__).resolve().parents[1] / "bench"
+SDIST_METADATA = Path(__file__).resolve().parents[1] / "PKG-INFO"
+
+
+@pytest.mark.skipif(
+    not BENCH_ROOT.is_dir() and SDIST_METADATA.is_file(),
+    reason="the sdist does not ship bench/ (MANIFEST.in prunes it), so the export source is absent",
+)
 def test_public_export_contains_only_release_surface(tmp_path: Path):
     export_root = tmp_path / "public"
 

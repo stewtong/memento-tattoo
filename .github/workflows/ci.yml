@@ -7,11 +7,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,3 +32,48 @@ jobs:
         run: |
           memento-tattoo --root examples/basic/memento doctor
           memento-tattoo --root examples/basic/memento load --query "rename an exported function in a shared package"
+
+  wheel:
+    name: Test built wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Install wheel and pytest
+        run: python -m pip install pytest dist/*.whl
+      - name: Check tests import the installed wheel
+        run: |
+          cd "$RUNNER_TEMP"
+          python -c "import memento_tattoo; p = memento_tattoo.__file__; print(p); assert '/src/' not in p and 'site-packages' in p, p"
+      - name: Run tests against installed wheel
+        run: python -m pytest -q -o pythonpath= .
+
+  sdist:
+    name: Test built sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Install wheel and pytest
+        run: python -m pip install pytest dist/*.whl
+      - name: Unpack sdist
+        run: |
+          mkdir "$RUNNER_TEMP/sdist"
+          tar -xzf dist/*.tar.gz -C "$RUNNER_TEMP/sdist" --strip-components=1
+      - name: Run sdist tests against installed wheel
+        working-directory: ${{ runner.temp }}/sdist
+        run: |
+          python -c "import memento_tattoo; p = memento_tattoo.__file__; print(p); assert '/src/' not in p and 'site-packages' in p, p"
+          python -m pytest -q -o pythonpath= .

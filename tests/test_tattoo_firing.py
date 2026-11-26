@@ -4,7 +4,7 @@ from memento_tattoo.tattoo_firing import bump_tattoo_firing, tattoo_firing_count
 from memento_tattoo.write_through import note_add
 
 
-TATTOO = "sess_d10d.tattoo.03de28d2"
+TATTOO = "sess_t001.tattoo.03de28d2"
 
 
 def test_note_citing_tattoo_bumps_counter_as_byproduct(tmp_path: Path):
